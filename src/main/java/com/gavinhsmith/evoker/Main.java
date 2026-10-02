@@ -2,6 +2,7 @@ package com.gavinhsmith.evoker;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +23,8 @@ public final class Main {
     private static final String USAGE = """
             usage: evoker <command>
 
+              init [software] [version] [--git]
+                                     create evoker.json (default: paper, latest release); --git also sets up git
               add <slug> [version]   add content (sodium, modrinth:lithium, hangar:ViaVersion) and install it
               add <url> --type <mod|plugin|datapack|resourcepack> [--name <name>]
                                      add a file from a URL
@@ -63,6 +66,7 @@ public final class Main {
         List<String> rest = Arrays.asList(args).subList(1, args.length);
         try {
             switch (args[0]) {
+                case "init" -> main.init(rest);
                 case "add" -> main.add(rest);
                 case "remove" -> main.remove(arg(rest, 0, "remove <slug>"));
                 case "install" -> main.install(Manifest.read(dir), false, key -> false);
@@ -96,6 +100,82 @@ public final class Main {
 
     static void warn(String message) {
         System.err.println("evoker: warning: " + message);
+    }
+
+    static final List<String> SOFTWARE = List.of("vanilla", "paper", "purpur", "fabric", "quilt", "neoforge", "spigot");
+
+    /** Ignores what evoker or the server can recreate; keeps configs and hand-added jars tracked. */
+    static final String GITIGNORE = """
+            # Downloaded by evoker (rebuilt from evoker.lock)
+            server.jar
+            fabric-server-launch.jar
+            mods/modrinth-*.jar
+            mods/hangar-*.jar
+            mods/url-*.jar
+            plugins/modrinth-*.jar
+            plugins/hangar-*.jar
+            plugins/url-*.jar
+            .evoker-*.tmp
+
+            # Recreated by the server
+            libraries/
+            versions/
+            cache/
+            .fabric/
+            .quilt/
+            plugins/.paper-remapped/
+            logs/
+            crash-reports/
+            debug/
+            usercache.json
+
+            # Worlds (large, constantly changing; back them up separately)
+            world/
+            world_nether/
+            world_the_end/
+            """;
+
+    /** init [software] [version] [--git] */
+    void init(List<String> args) {
+        boolean git = args.contains("--git");
+        List<String> positional = args.stream().filter(a -> !a.startsWith("--")).toList();
+        if (Files.exists(dir.resolve(Manifest.FILE))) {
+            throw new EvokerException(Manifest.FILE + " already exists in " + dir);
+        }
+        String software = positional.isEmpty() ? "paper" : positional.get(0).toLowerCase();
+        if (!SOFTWARE.contains(software)) throw new EvokerException("unknown server software " + software + "; one of " + SOFTWARE);
+        String version = positional.size() > 1 ? positional.get(1) : server.latestRelease();
+        new Manifest(new Manifest.ServerSpec(software, version, null), false, null, null, null).write(dir);
+        log("created " + Manifest.FILE + " for " + software + " " + version
+                + "; set \"eula\": true to accept the Minecraft EULA (https://aka.ms/MinecraftEULA)");
+        if (git) initGit();
+    }
+
+    private void initGit() {
+        try {
+            if (!Files.exists(dir.resolve(".git"))) {
+                Process p = new ProcessBuilder("git", "init").directory(dir.toFile()).inheritIO().start();
+                if (p.waitFor() != 0) warn("git init failed");
+            }
+        } catch (IOException e) {
+            warn("git not found; skipping git init");
+            return;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new EvokerException("interrupted", e);
+        }
+        Path ignore = dir.resolve(".gitignore");
+        if (Files.exists(ignore)) {
+            warn(".gitignore already exists; leaving it alone");
+        } else {
+            try {
+                Files.writeString(ignore, GITIGNORE);
+            } catch (IOException e) {
+                throw new EvokerException("cannot write " + ignore + ": " + e.getMessage(), e);
+            }
+            log("created .gitignore");
+        }
+        warn("server.properties can hold secrets (rcon.password); keep them out of public repositories");
     }
 
     /** add <slug> [version] | add <url> --type <type> [--name <name>] */

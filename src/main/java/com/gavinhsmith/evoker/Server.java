@@ -42,6 +42,11 @@ final class Server {
         return command;
     }
 
+    /** The newest Minecraft release, e.g. for evoker init. */
+    String latestRelease() {
+        return http.json(apis.mojang() + "/mc/game/version_manifest_v2.json").path("latest").path("release").asString();
+    }
+
     private Resolved vanilla(String version) {
         JsonNode manifest = http.json(apis.mojang() + "/mc/game/version_manifest_v2.json");
         for (JsonNode v : manifest.path("versions")) {

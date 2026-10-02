@@ -19,11 +19,17 @@ Download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/e
 java -jar evoker.jar <command>
 ```
 
-Describe your server in `evoker.json`:
+## Quick start
+
+```sh
+java -jar evoker.jar init paper 1.21.4 --git  # evoker.json, git repo and .gitignore
+```
+
+Set `"eula": true` in `evoker.json` (accepting the [Minecraft EULA](https://aka.ms/MinecraftEULA)), add `properties` or `jvmArgs` if you like:
 
 ```json
 {
-  "server": { "software": "paper", "version": "1.21.4" },
+  "server": { "software": "paper", "version": "1.21.4", "build": "latest" },
   "eula": true,
   "properties": { "motd": "My server" },
   "evoker": { "jvmArgs": ["-Xmx4G"] }
@@ -49,7 +55,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | `add` / `remove`, Modrinth content, dependency resolution | ✅ |
 | `update` / `upgrade`, auto-updates | ✅ |
 | Hangar + URL sources | ✅ |
-| `init --git` | planned |
+| `init --git` | ✅ |
 | quilt, neoforge | planned |
 | spigot | planned |
 

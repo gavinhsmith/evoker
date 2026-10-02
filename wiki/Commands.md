@@ -4,6 +4,7 @@ Run every command inside the server folder: `java -jar evoker.jar <command>`.
 
 | Command | What it does |
 |---|---|
+| `init [software] [version] [--git]` | Writes a starter `evoker.json` (default `paper` on the newest Minecraft release). Refuses if one exists. `--git` runs `git init` and writes a server `.gitignore` (see [Getting Started](Getting-Started#git)). |
 | `add <slug> [version]` | Adds content to `evoker.json` (`latest` unless you give a version), resolves it and its dependencies, and downloads them. `sodium` means `modrinth:sodium`; use `hangar:<slug>` for Hangar. Adding an existing entry changes its version. |
 | `add <url> --type <type> [--name <name>]` | Adds a file from a URL as `url:<name>`. `--type` is required: `mod`, `plugin`, `datapack` or `resourcepack`. See [Content Sources](Content-Sources#url). |
 | `remove <slug>` | Removes the entry from `evoker.json`, then deletes it and every dependency nothing else needs anymore. |
