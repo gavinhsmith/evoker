@@ -7,6 +7,7 @@ Run every command inside the server folder: `java -jar evoker.jar <command>`.
 | `init [software] [version] [--git]` | Writes a starter `evoker.json` (default `paper` on the newest Minecraft release). Refuses if one exists. `--git` runs `git init` and writes a server `.gitignore` (see [Getting Started](Getting-Started#git)). |
 | `add <slug> [version]` | Adds content to `evoker.json` (`latest` unless you give a version), resolves it and its dependencies, and downloads them. `sodium` means `modrinth:sodium`; use `hangar:<slug>` for Hangar. Adding an existing entry changes its version. |
 | `add <url> --type <type> [--name <name>]` | Adds a file from a URL as `url:<name>`. `--type` is required: `mod`, `plugin`, `datapack` or `resourcepack`. See [Content Sources](Content-Sources#url). |
+| `import <pack>` | Imports a Modrinth modpack: a `.mrpack` file, a URL to one, or a modpack's Modrinth slug (newest release). See [Content Sources](Content-Sources#modpacks-mrpack). |
 | `remove <slug>` | Removes the entry from `evoker.json`, then deletes it and every dependency nothing else needs anymore. |
 | `install` | Brings the folder in line with `evoker.json` and `evoker.lock`: resolves anything new or changed in `evoker.json`, downloads whatever is missing, deletes what was removed, applies `properties` and `eula`. |
 | `update [slug]` | Moves `latest` entries to their newest compatible versions, and the server to its newest build if `build` is `latest`. Pinned entries stay. With a slug, updates only that entry (and not the server). Prints what changed. |

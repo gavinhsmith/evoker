@@ -34,6 +34,16 @@ final class Http {
         return Json.MAPPER.readTree(response.body());
     }
 
+    /** POSTs body as JSON and parses the JSON reply. */
+    JsonNode postJson(String url, Object body) {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", USER_AGENT)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(Json.MAPPER.writeValueAsString(body))).build();
+        HttpResponse<String> response = send(request, HttpResponse.BodyHandlers.ofString());
+        check(url, response);
+        return Json.MAPPER.readTree(response.body());
+    }
+
     /** A downloaded temp file and its hashes. The caller moves or deletes it. */
     record Fetched(Path file, String sha256, String sha1) {}
 
@@ -92,7 +102,11 @@ final class Http {
     }
 
     private <T> HttpResponse<T> send(String url, HttpResponse.BodyHandler<T> handler) {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", USER_AGENT).build();
+        return send(HttpRequest.newBuilder(URI.create(url)).header("User-Agent", USER_AGENT).build(), handler);
+    }
+
+    private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> handler) {
+        String url = request.uri().toString();
         try {
             return client.send(request, handler);
         } catch (IOException e) {

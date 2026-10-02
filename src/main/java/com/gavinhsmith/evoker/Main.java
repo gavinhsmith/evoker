@@ -15,6 +15,8 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import tools.jackson.databind.JsonNode;
 
 public final class Main {
     static final String VERSION =
@@ -28,6 +30,7 @@ public final class Main {
               add <slug> [version]   add content (sodium, modrinth:lithium, hangar:ViaVersion) and install it
               add <url> --type <mod|plugin|datapack|resourcepack> [--name <name>]
                                      add a file from a URL
+              import <pack>          import a Modrinth modpack (.mrpack file, URL, or modpack slug)
               remove <slug>          remove content and whatever only it needed
               install                download whatever evoker.json / evoker.lock say is missing
               update [slug]          move "latest" entries (and the server build) to their newest versions
@@ -37,17 +40,19 @@ public final class Main {
             """;
 
     private final Path dir;
+    private final Http http = new Http();
     private final Server server;
     private final Installer installer;
+    private final Modrinth modrinth;
     private final Resolver resolver;
 
     Main(Path dir, Apis apis) {
-        Http http = new Http();
         this.dir = dir;
         this.server = new Server(http, apis);
         this.installer = new Installer(dir, http);
+        this.modrinth = new Modrinth(http, apis.modrinth());
         this.resolver = new Resolver(Map.of(
-                "modrinth", new Modrinth(http, apis.modrinth()),
+                "modrinth", modrinth,
                 "hangar", new Hangar(http, apis.hangar()),
                 "url", new UrlSource()));
     }
@@ -67,6 +72,7 @@ public final class Main {
         try {
             switch (args[0]) {
                 case "init" -> main.init(rest);
+                case "import" -> main.importPack(arg(rest, 0, "import <file.mrpack | url | modrinth-slug>"));
                 case "add" -> main.add(rest);
                 case "remove" -> main.remove(arg(rest, 0, "remove <slug>"));
                 case "install" -> main.install(Manifest.read(dir), false, key -> false);
@@ -187,6 +193,75 @@ public final class Main {
         warn("server.properties can hold secrets (rcon.password); keep them out of public repositories");
     }
 
+    /** import <file.mrpack | url | modrinth-slug>: a Modrinth modpack becomes evoker.json entries. */
+    void importPack(String ref) {
+        Path local = dir.resolve(ref);
+        if (Files.isRegularFile(local)) {
+            importPack(local);
+            return;
+        }
+        String url = ref.startsWith("https://") || ref.startsWith("http://") ? ref
+                : modrinth.packUrl(ref.startsWith("modrinth:") ? ref.substring("modrinth:".length()) : ref);
+        log("downloading " + url);
+        Path temp = http.download(url, dir, null, null).file();
+        try {
+            importPack(temp);
+        } finally {
+            Http.deleteQuietly(temp);
+        }
+    }
+
+    /**
+     * Sets the server from the pack and adds its server-side files: files Modrinth knows (by hash) as pinned
+     * modrinth: entries, the rest of mods/ and plugins/ as url: entries. Overrides are copied without replacing
+     * existing files, then everything is installed. Pack entries replace same-named evoker.json entries.
+     */
+    private void importPack(Path zip) {
+        Mrpack pack = Mrpack.read(zip);
+        Map<String, JsonNode> byHash =
+                modrinth.versionsByHash(pack.files().stream().map(Mrpack.PackFile::sha512).toList());
+        Map<String, String> slugs = modrinth.slugs(
+                byHash.values().stream().map(v -> v.path("project_id").asString()).collect(Collectors.toSet()));
+
+        var content = new LinkedHashMap<String, Manifest.Content>();
+        var skipped = new ArrayList<String>();
+        for (Mrpack.PackFile f : pack.files()) {
+            // Packs also list resource packs, shaders and config files; only mods and plugins run on a server.
+            String type = f.path().startsWith("mods/") ? "mod" : f.path().startsWith("plugins/") ? "plugin" : null;
+            if (type == null) {
+                skipped.add(f.path());
+                continue;
+            }
+            var v = byHash.get(f.sha512());
+            if (v != null) {
+                content.put("modrinth:" + slugs.get(v.path("project_id").asString()),
+                        new Manifest.Content(v.path("version_number").asString(), null, null));
+            } else {
+                content.put("url:" + fileName(f.path(), f.path()), new Manifest.Content(null, f.url(), type));
+            }
+        }
+        if (!skipped.isEmpty()) warn("skipping " + skipped.size() + " files outside mods/ and plugins/: " + skipped);
+
+        Manifest existing = Files.exists(dir.resolve(Manifest.FILE)) ? Manifest.read(dir) : null;
+        var merged = new LinkedHashMap<>(existing == null ? Map.of() : existing.content());
+        merged.putAll(content);
+        Manifest updated = existing == null
+                ? new Manifest(pack.server(), false, null, merged, null)
+                : new Manifest(pack.server(), existing.eula(), existing.properties(), merged, existing.evoker());
+
+        install(updated, false, content::containsKey);
+        int[] overrides = Mrpack.extractOverrides(zip, dir); // only once the install worked
+        updated.write(dir);
+
+        long fromModrinth = content.keySet().stream().filter(k -> k.startsWith("modrinth:")).count();
+        log("imported " + pack.name() + " " + pack.version() + " (" + pack.server().software() + " "
+                + pack.server().version() + "): " + fromModrinth + " from Modrinth, " + (content.size() - fromModrinth)
+                + " from URLs, " + pack.clientOnly() + " client-only skipped"
+                + (skipped.isEmpty() ? "" : ", " + skipped.size() + " other files skipped"));
+        log(overrides[0] + " override files copied" + (overrides[1] > 0 ? ", " + overrides[1] + " existing files kept" : ""));
+        if (!updated.eula()) log("set \"eula\": true in " + Manifest.FILE + " to accept the Minecraft EULA (https://aka.ms/MinecraftEULA)");
+    }
+
     /** add <slug> [version] | add <url> --type <type> [--name <name>] */
     void add(List<String> args) {
         var positional = new ArrayList<String>();
@@ -220,11 +295,15 @@ public final class Main {
 
     /** The URL's file name without extension, reduced to characters safe in a file name. */
     static String urlName(String url) {
-        String path = URI.create(url).getPath();
+        return fileName(URI.create(url).getPath(), url);
+    }
+
+    /** The last path segment without extension, reduced to characters safe in a file name. */
+    private static String fileName(String path, String what) {
         String name = path == null ? "" : path.substring(path.lastIndexOf('/') + 1);
         if (name.contains(".")) name = name.substring(0, name.lastIndexOf('.'));
         name = name.replaceAll("[^A-Za-z0-9._-]", "-");
-        if (name.isEmpty()) throw new EvokerException("cannot name " + url + "; pass --name");
+        if (name.isEmpty()) throw new EvokerException("cannot name " + what + "; pass --name");
         return name;
     }
 

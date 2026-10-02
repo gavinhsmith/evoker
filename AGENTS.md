@@ -23,7 +23,7 @@ evoker is a Java 21 CLI that manages a Minecraft server's dependencies. `evoker.
 
 - `Main`: CLI entry; a `switch` on the command, no CLI library. Also the install flow: `plan` (resolve, no side effects; used by `upgrade --dry-run`) then apply (download, delete, write lock)
 - `Manifest`, `Lock`: `evoker.json` / `evoker.lock` records and JSON IO (`Json` holds the one mapper)
-- `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers
+- `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers; `Mrpack`: reading .mrpack files for `import`
 - `Server`: per-software resolution, installers (quilt, neoforge, spigot) and launch command
 - `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure
 - `Installer`: file placement, lock-hash checks, `server.properties` / `eula.txt`

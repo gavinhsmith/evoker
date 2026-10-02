@@ -41,6 +41,7 @@ Then:
 ```sh
 java -jar evoker.jar add luckperms            # Modrinth content, dependencies included
 java -jar evoker.jar add hangar:ViaVersion    # Hangar plugins
+java -jar evoker.jar import cobblemon-fabric  # or start from a Modrinth modpack
 java -jar evoker.jar start                    # download what's missing, write evoker.lock, run the server
 ```
 
@@ -58,6 +59,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | `init --git` | ✅ |
 | quilt, neoforge | ✅ |
 | spigot (via BuildTools) | ✅ |
+| `import` Modrinth modpacks (.mrpack) | ✅ |
 
 ## Contributing
 

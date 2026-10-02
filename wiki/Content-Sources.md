@@ -85,6 +85,27 @@ evoker add hangar:ViaVersion
 - Some Hangar versions are only an external link with no checksum. evoker still hashes the file it downloads and pins it in the lock.
 - Files: `plugins/hangar-<projectId>.jar`.
 
+## Modpacks (.mrpack)
+
+`evoker import` turns a [Modrinth modpack](https://modrinth.com/modpacks) into a server:
+
+```sh
+evoker import cobblemon-fabric        # a modpack's Modrinth slug: its newest release
+evoker import ./MyPack-1.2.mrpack     # a local file
+evoker import https://…/MyPack.mrpack # a URL
+```
+
+What happens:
+
+1. **Server:** `software`, `version` and `build` come from the pack (`fabric-loader`, `quilt-loader`, `neoforge`, or vanilla). Forge packs aren't supported.
+2. **Files:** only `mods/` and `plugins/` files are imported. Files the pack marks as not supported on servers are skipped, and so are resource packs, shaders and other client files (listed in a warning).
+   - Files Modrinth recognizes (by hash) become `modrinth:<slug>` entries **pinned to the pack's version**, so they upgrade like any other entry.
+   - Other files become `url:<file name>` entries.
+3. **Install:** everything is resolved and downloaded as usual, including dependencies.
+4. **Overrides:** the pack's `overrides/` and `server-overrides/` (configs, mostly) are copied into the server folder **without replacing files that already exist**, so importing over a configured server keeps your configs.
+
+The import is one-time: afterwards `evoker.json` is the source of truth, and the pack isn't tracked. An existing `evoker.json` keeps its `eula`, `properties` and `evoker` settings; the pack's entries are added to its content. A new one starts with `"eula": false`.
+
 ## URL
 
 Any file from a URL, for things on neither Modrinth nor Hangar:

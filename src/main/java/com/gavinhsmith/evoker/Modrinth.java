@@ -3,8 +3,12 @@ package com.gavinhsmith.evoker;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import tools.jackson.databind.JsonNode;
 
 /** Modrinth (https://docs.modrinth.com/api/): mods, plugins, data packs and resource packs. */
@@ -65,6 +69,43 @@ final class Modrinth implements Source {
                 file.path("hashes").path("sha1").asString(null), null);
         return new Resolution(slug, entry, chosen.path("date_published").asString(), dependencies,
                 "SHA-512", file.path("hashes").path("sha512").asString(null));
+    }
+
+    /** Modrinth versions by the sha512 of one of their files, for the hashes Modrinth knows. */
+    Map<String, JsonNode> versionsByHash(List<String> sha512) {
+        var found = new HashMap<String, JsonNode>();
+        if (sha512.isEmpty()) return found;
+        http.postJson(api + "/version_files", Map.of("hashes", sha512, "algorithm", "sha512"))
+                .properties().forEach(e -> found.put(e.getKey(), e.getValue()));
+        return found;
+    }
+
+    /** Project slugs by project id. */
+    Map<String, String> slugs(Collection<String> projectIds) {
+        var slugs = new HashMap<String, String>();
+        if (projectIds.isEmpty()) return slugs;
+        String ids = projectIds.stream().sorted().map(id -> "\"" + id + "\"").collect(Collectors.joining(",", "[", "]"));
+        for (JsonNode p : http.json(api + "/projects?ids=" + enc(ids))) {
+            slugs.put(p.path("id").asString(), p.path("slug").asString());
+        }
+        return slugs;
+    }
+
+    /** The .mrpack of a modpack project's newest release (or newest version). */
+    String packUrl(String slug) {
+        JsonNode versions = http.jsonOrNull(api + "/project/" + enc(slug) + "/version");
+        if (versions == null || versions.isEmpty()) throw new EvokerException("no Modrinth modpack \"" + slug + "\"");
+        JsonNode chosen = versions.get(0);
+        for (JsonNode v : versions) {
+            if (v.path("version_type").asString().equals("release")) {
+                chosen = v;
+                break;
+            }
+        }
+        for (JsonNode f : chosen.path("files")) {
+            if (f.path("url").asString().endsWith(".mrpack")) return f.path("url").asString();
+        }
+        throw new EvokerException("modrinth:" + slug + " " + chosen.path("version_number").asString() + " has no .mrpack file");
     }
 
     /** Pinned: that version (warning if not marked compatible). latest: newest compatible, preferring releases. */
