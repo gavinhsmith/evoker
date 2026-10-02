@@ -46,6 +46,42 @@ final class Installer {
         }
     }
 
+    /**
+     * Where a content entry lives: {@code <source>-<projectId>.<ext>} in mods/, plugins/ or the world's datapacks/.
+     * Resource packs are not stored (server.properties points at their URL), so they have no path.
+     */
+    Path path(String key, Lock.Entry entry, String levelName) {
+        String name = Resolver.source(key) + "-" + entry.projectId();
+        return switch (entry.type()) {
+            case "mod" -> dir.resolve("mods").resolve(name + ".jar");
+            case "plugin" -> dir.resolve("plugins").resolve(name + ".jar");
+            case "datapack" -> dir.resolve(levelName).resolve("datapacks").resolve(name + ".zip");
+            default -> null;
+        };
+    }
+
+    /** The world folder, from server.properties (Minecraft's default is "world"). */
+    String levelName() {
+        Path file = dir.resolve("server.properties");
+        if (!Files.exists(file)) return "world";
+        Properties props = new Properties();
+        try (InputStream in = Files.newInputStream(file)) {
+            props.load(in);
+        } catch (IOException e) {
+            throw new EvokerException("cannot read " + file + ": " + e.getMessage(), e);
+        }
+        String name = props.getProperty("level-name", "").trim();
+        return name.isEmpty() ? "world" : name;
+    }
+
+    void delete(String label, Path file) {
+        try {
+            if (Files.deleteIfExists(file)) Main.log("deleted " + dir.relativize(file) + " (" + label + ")");
+        } catch (IOException e) {
+            Main.warn("cannot delete " + file + ": " + e.getMessage());
+        }
+    }
+
     /** Sets the given keys in server.properties, leaving every other key alone. Writes only on change. */
     void properties(Map<String, Object> wanted) {
         if (wanted.isEmpty()) return;

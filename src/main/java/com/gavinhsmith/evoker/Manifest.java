@@ -40,6 +40,10 @@ record Manifest(ServerSpec server, boolean eula, Map<String, Object> properties,
         }
     }
 
+    Manifest withContent(Map<String, Content> content) {
+        return new Manifest(server, eula, properties, content, evoker);
+    }
+
     void write(Path dir) {
         Json.write(dir.resolve(FILE), this);
     }

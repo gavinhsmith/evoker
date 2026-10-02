@@ -1,0 +1,20 @@
+[
+  {
+    "id": "p1", "project_id": "SSSS", "version_number": "5.0", "version_type": "release",
+    "date_published": "2026-01-03T00:00:00Z", "loaders": ["bukkit", "paper", "spigot"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/plugin.jar", "filename": "plugin.jar", "primary": true, "hashes": {"sha512": "0", "sha1": "0"}}],
+    "dependencies": []
+  },
+  {
+    "id": "r1", "project_id": "SSSS", "version_number": "5.0-pack", "version_type": "release",
+    "date_published": "2026-01-02T00:00:00Z", "loaders": ["minecraft"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/pack.zip", "filename": "pack.zip", "primary": true, "hashes": {"sha512": "0", "sha1": "packsha1"}}],
+    "dependencies": []
+  },
+  {
+    "id": "f1", "project_id": "SSSS", "version_number": "5.0-forge", "version_type": "release",
+    "date_published": "2026-01-04T00:00:00Z", "loaders": ["forge"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/forge.jar", "filename": "forge.jar", "primary": true, "hashes": {"sha512": "0", "sha1": "0"}}],
+    "dependencies": []
+  }
+]

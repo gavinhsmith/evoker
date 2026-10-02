@@ -86,6 +86,106 @@ class MainTest {
         assertEquals("older", Files.readString(dir.resolve("server.jar")));
     }
 
+    /** A fabric server whose Modrinth has alpha 2.0 (requires beta) and beta 1.0. */
+    private void fabricProject() throws IOException {
+        byte[] alpha = "alpha-2".getBytes(), beta = "beta-1".getBytes();
+        api.json("/fabric/v2/versions/loader/1.21.4", "fabric-loaders.json")
+                .json("/fabric/v2/versions/installer", "fabric-installers.json")
+                .bytes("/fabric/v2/versions/loader/1.21.4/0.19.5/1.1.2/server/jar", FakeServer.jar())
+                .json("/modrinth/v2/project/alpha", "modrinth-project-alpha.json")
+                .json(FakeApi.modrinthVersions("AAAA", "1.21.4"), "modrinth-versions-alpha.json",
+                        "sha512", FakeServer.hash("SHA-512", alpha))
+                .json("/modrinth/v2/project/BBBB", "modrinth-project-beta.json")
+                .json(FakeApi.modrinthVersions("BBBB", "1.21.4"), "modrinth-versions-beta.json",
+                        "sha512", FakeServer.hash("SHA-512", beta))
+                .bytes("/files/alpha-2.jar", alpha)
+                .bytes("/files/beta-1.jar", beta);
+        Files.writeString(dir.resolve(Manifest.FILE), """
+                { "server": { "software": "fabric", "version": "1.21.4" } }
+                """);
+    }
+
+    @Test
+    void addInstallsContentAndItsDependencies() throws IOException {
+        fabricProject();
+
+        Stderr.capture(() -> assertEquals(0, run("add", "alpha")));
+
+        assertEquals("alpha-2", Files.readString(dir.resolve("mods/modrinth-AAAA.jar")));
+        assertEquals("beta-1", Files.readString(dir.resolve("mods/modrinth-BBBB.jar")));
+        assertEquals(java.util.Set.of("modrinth:alpha"), Manifest.read(dir).content().keySet());
+        Lock lock = Lock.read(dir);
+        assertEquals("2.0", lock.content().get("modrinth:alpha").version());
+        assertEquals(java.util.List.of("modrinth:alpha"), lock.content().get("modrinth:beta").requiredBy());
+        assertEquals(Http.sha256(dir.resolve("mods/modrinth-BBBB.jar")), lock.content().get("modrinth:beta").sha256());
+
+        api.hits.set(0);
+        assertEquals(0, run("install"));
+        assertEquals(0, api.hits.get(), "lock satisfied, nothing to resolve or download");
+    }
+
+    @Test
+    void removeDeletesTheEntryAndItsOrphanedDependencies() throws IOException {
+        fabricProject();
+        Stderr.capture(() -> run("add", "alpha"));
+
+        assertEquals(0, run("remove", "alpha"));
+
+        assertTrue(Files.notExists(dir.resolve("mods/modrinth-AAAA.jar")));
+        assertTrue(Files.notExists(dir.resolve("mods/modrinth-BBBB.jar")));
+        assertTrue(Lock.read(dir).content().isEmpty());
+        assertTrue(Manifest.read(dir).content().isEmpty());
+    }
+
+    @Test
+    void removingADependencyExplainsWhoNeedsIt() throws IOException {
+        fabricProject();
+        Stderr.capture(() -> run("add", "alpha"));
+
+        String err = Stderr.capture(() -> assertEquals(1, run("remove", "beta")));
+
+        assertTrue(err.contains("required by [modrinth:alpha]"), err);
+    }
+
+    @Test
+    void addFailureLeavesEvokerJsonUntouched() throws IOException {
+        fabricProject();
+        String before = Files.readString(dir.resolve(Manifest.FILE));
+
+        Stderr.capture(() -> assertEquals(1, run("add", "nope")));
+
+        assertEquals(before, Files.readString(dir.resolve(Manifest.FILE)));
+    }
+
+    @Test
+    void dataPacksGoIntoTheWorldAndResourcePacksIntoServerProperties() throws IOException {
+        byte[] zip = "alpha-datapack".getBytes();
+        byte[] jar = FakeServer.jar();
+        api.json("/mojang/mc/game/version_manifest_v2.json", "mojang-manifest.json")
+                .json("/mojang/v1/packages/bbb/1.21.4.json", "mojang-1.21.4.json", "sha1", FakeServer.hash("SHA-1", jar))
+                .bytes("/files/server.jar", jar)
+                .json("/modrinth/v2/project/alpha", "modrinth-project-alpha.json")
+                .json(FakeApi.modrinthVersions("AAAA", "1.21.4"), "modrinth-versions-alpha.json",
+                        "sha512zip", FakeServer.hash("SHA-512", zip))
+                .bytes("/files/alpha-2.zip", zip)
+                .json("/modrinth/v2/project/shiny", "modrinth-project-client.json")
+                .json(FakeApi.modrinthVersions("SSSS", "1.21.4"), "modrinth-versions-mixed.json");
+        Files.writeString(dir.resolve(Manifest.FILE), """
+                {
+                  "server": { "software": "vanilla", "version": "1.21.4" },
+                  "properties": { "level-name": "survival" },
+                  "content": { "alpha": "latest", "shiny": "latest" }
+                }
+                """);
+
+        Stderr.capture(() -> assertEquals(0, run("install")));
+
+        assertEquals("alpha-datapack", Files.readString(dir.resolve("survival/datapacks/modrinth-AAAA.zip")));
+        String props = Files.readString(dir.resolve("server.properties"));
+        assertTrue(props.contains("resource-pack=" + api.base.replace(":", "\\:") + "/files/pack.zip"), props);
+        assertTrue(props.contains("resource-pack-sha1=packsha1"), props);
+    }
+
     @Test
     void errorsExitWithOne() {
         assertEquals(1, run("install"));

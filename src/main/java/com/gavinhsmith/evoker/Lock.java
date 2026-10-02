@@ -46,7 +46,15 @@ record Lock(int lockVersion, Locked server, Map<String, Entry> content) {
         }
     }
 
-    /** An installed content entry. */
+    Lock withContent(Map<String, Entry> content) {
+        return new Lock(VERSION, server, content);
+    }
+
+    /** An installed content entry. type is mod, plugin, datapack or resourcepack. */
     record Entry(String type, String projectId, String versionId, String version, String url, String sha256,
-                 String sha1, List<String> requiredBy) {}
+                 String sha1, List<String> requiredBy) {
+        Entry withSha256(String sha256) {
+            return new Entry(type, projectId, versionId, version, url, sha256, sha1, requiredBy);
+        }
+    }
 }

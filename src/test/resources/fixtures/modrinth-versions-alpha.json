@@ -1,0 +1,35 @@
+[
+  {
+    "id": "a3", "project_id": "AAAA", "version_number": "3.0-beta", "version_type": "beta",
+    "date_published": "2026-03-01T00:00:00Z", "loaders": ["fabric"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/alpha-3.jar", "filename": "alpha-3.jar", "primary": true, "hashes": {"sha512": "0", "sha1": "0"}}],
+    "dependencies": []
+  },
+  {
+    "id": "a2d", "project_id": "AAAA", "version_number": "2.0", "version_type": "release",
+    "date_published": "2026-02-02T00:00:00Z", "loaders": ["datapack"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/alpha-2.zip", "filename": "alpha-2.zip", "primary": true, "hashes": {"sha512": "{sha512zip}", "sha1": "0"}}],
+    "dependencies": []
+  },
+  {
+    "id": "a2", "project_id": "AAAA", "version_number": "2.0", "version_type": "release",
+    "date_published": "2026-02-01T00:00:00Z", "loaders": ["fabric", "quilt"], "game_versions": ["1.21.4"],
+    "files": [
+      {"url": "{base}/files/alpha-2-sources.jar", "filename": "alpha-2-sources.jar", "primary": false, "hashes": {"sha512": "0", "sha1": "0"}},
+      {"url": "{base}/files/alpha-2.jar", "filename": "alpha-2.jar", "primary": true, "hashes": {"sha512": "{sha512}", "sha1": "a2sha1"}}
+    ],
+    "dependencies": [
+      {"project_id": "BBBB", "version_id": null, "file_name": null, "dependency_type": "required"},
+      {"project_id": "CCCC", "version_id": null, "file_name": null, "dependency_type": "optional"},
+      {"project_id": "DDDD", "version_id": null, "file_name": null, "dependency_type": "incompatible"},
+      {"project_id": "EEEE", "version_id": null, "file_name": null, "dependency_type": "embedded"},
+      {"project_id": null, "version_id": null, "file_name": "external.jar", "dependency_type": "required"}
+    ]
+  },
+  {
+    "id": "a1", "project_id": "AAAA", "version_number": "1.0", "version_type": "release",
+    "date_published": "2026-01-01T00:00:00Z", "loaders": ["fabric"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/alpha-1.jar", "filename": "alpha-1.jar", "primary": true, "hashes": {"sha512": "0", "sha1": "0"}}],
+    "dependencies": []
+  }
+]

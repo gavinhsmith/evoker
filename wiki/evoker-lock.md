@@ -12,9 +12,31 @@ Records exactly what evoker installed. **Written only by evoker; don't edit it. 
     "url": "https://fill-data.papermc.io/v1/objects/…/paper-1.21.4-232.jar",
     "sha256": "5ee4f542…"
   },
-  "content": {}
+  "content": {
+    "modrinth:fabric-api": {
+      "type": "mod",
+      "projectId": "P7dR8mSH",
+      "versionId": "…",
+      "version": "0.119.4+1.21.4",
+      "url": "https://cdn.modrinth.com/…",
+      "sha256": "…",
+      "sha1": "…",
+      "requiredBy": [ "modrinth:modmenu" ]
+    }
+  }
 }
 ```
+
+## Content entries
+
+| Field | Meaning |
+|---|---|
+| `type` | `mod`, `plugin`, `datapack` or `resourcepack`; decides where the file goes |
+| `projectId` | Stable upstream id; the file is named `<source>-<projectId>` |
+| `versionId`, `version` | Exact upstream version (id and readable number) |
+| `url`, `sha256` | Where it was downloaded from, and evoker's hash of the file |
+| `sha1` | Upstream SHA-1 (used for resource packs in `server.properties`) |
+| `requiredBy` | Entries that need it. Present only on dependencies; once nothing needs it and it isn't in `evoker.json`, it is removed. |
 
 ## How it is used
 

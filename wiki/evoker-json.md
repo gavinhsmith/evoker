@@ -7,6 +7,7 @@ Describes the server you want. You write it; evoker only rewrites it when a comm
   "server": { "software": "fabric", "version": "1.21.4", "build": "latest" },
   "eula": true,
   "properties": { "motd": "hi", "max-players": 20 },
+  "content": { "modrinth:lithium": "latest" },
   "evoker": {
     "autoUpdateDeps": false,
     "autoUpdateServer": false,
@@ -33,6 +34,19 @@ Changing any of these makes the next `install`/`start` download the matching ser
 ## `properties`
 
 Keys to set in `server.properties`. They are **enforced**: every `install`/`start` sets them again, so `evoker.json` stays the source of truth. Keys you don't list are left alone. Values can be strings, numbers or booleans.
+
+## `content`
+
+Mods, plugins, data packs and resource packs, keyed `source:slug` (no prefix means `modrinth`). The value is `"latest"` or a pinned version. Usually managed with `evoker add` / `evoker remove`.
+
+```json
+"content": {
+  "modrinth:lithium": "latest",
+  "modrinth:terralith": "2.5.8"
+}
+```
+
+Only list what you want; required dependencies are added to `evoker.lock` automatically. See [Content Sources](Content-Sources).
 
 ## `evoker`
 

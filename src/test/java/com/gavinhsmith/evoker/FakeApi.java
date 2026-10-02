@@ -63,6 +63,12 @@ final class FakeApi implements AutoCloseable {
         return bytes(path, text.getBytes(StandardCharsets.UTF_8));
     }
 
+    /** The path Modrinth's client requests for a project's versions on a game version. */
+    static String modrinthVersions(String projectId, String gameVersion) {
+        return "/modrinth/v2/project/" + projectId + "/version?game_versions="
+                + java.net.URLEncoder.encode("[\"" + gameVersion + "\"]", StandardCharsets.UTF_8);
+    }
+
     @Override
     public void close() {
         server.stop(0);

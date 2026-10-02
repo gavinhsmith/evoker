@@ -1,0 +1,8 @@
+[
+  {
+    "id": "b1", "project_id": "BBBB", "version_number": "1.0", "version_type": "release",
+    "date_published": "2026-01-01T00:00:00Z", "loaders": ["fabric"], "game_versions": ["1.21.4"],
+    "files": [{"url": "{base}/files/beta-1.jar", "filename": "beta-1.jar", "primary": true, "hashes": {"sha512": "{sha512}", "sha1": "0"}}],
+    "dependencies": []
+  }
+]

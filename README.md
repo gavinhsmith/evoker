@@ -30,7 +30,12 @@ Describe your server in `evoker.json`:
 }
 ```
 
-Then `java -jar evoker.jar start` downloads the server, writes `evoker.lock`, and runs it.
+Then:
+
+```sh
+java -jar evoker.jar add luckperms   # Modrinth content, dependencies included
+java -jar evoker.jar start           # download what's missing, write evoker.lock, run the server
+```
 
 Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wiki).
 
@@ -40,7 +45,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 |---|---|
 | Build, CI, releases, wiki | ✅ |
 | `install` / `start` (vanilla, paper, purpur, fabric) | ✅ |
-| Modrinth content, dependency resolution | planned |
+| `add` / `remove`, Modrinth content, dependency resolution | ✅ |
 | `update` / `upgrade` | planned |
 | Hangar + URL sources | planned |
 | `init --git` | planned |
