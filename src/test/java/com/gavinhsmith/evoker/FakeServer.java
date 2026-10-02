@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -23,18 +24,31 @@ public class FakeServer {
         System.exit(EXIT_CODE);
     }
 
-    /** A runnable jar containing this class. */
+    /** A runnable jar of this class. */
     static byte[] jar() {
+        return jar(FakeServer.class, Map.of());
+    }
+
+    /** A runnable jar with main as entry point, containing the fake classes and the given resources. */
+    static byte[] jar(Class<?> main, Map<String, byte[]> resources) {
         var manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, FakeServer.class.getName());
-        String entry = FakeServer.class.getName().replace('.', '/') + ".class";
+        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, main.getName());
         var bytes = new ByteArrayOutputStream();
-        try (var jar = new JarOutputStream(bytes, manifest);
-             InputStream in = FakeServer.class.getClassLoader().getResourceAsStream(entry)) {
-            jar.putNextEntry(new JarEntry(entry));
-            in.transferTo(jar);
-            jar.closeEntry();
+        try (var jar = new JarOutputStream(bytes, manifest)) {
+            for (Class<?> c : new Class<?>[] {FakeServer.class, FakeInstaller.class}) {
+                String entry = c.getName().replace('.', '/') + ".class";
+                try (InputStream in = c.getClassLoader().getResourceAsStream(entry)) {
+                    jar.putNextEntry(new JarEntry(entry));
+                    in.transferTo(jar);
+                    jar.closeEntry();
+                }
+            }
+            for (var r : resources.entrySet()) {
+                jar.putNextEntry(new JarEntry(r.getKey()));
+                jar.write(r.getValue());
+                jar.closeEntry();
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

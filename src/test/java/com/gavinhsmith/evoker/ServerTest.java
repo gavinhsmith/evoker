@@ -80,15 +80,55 @@ class ServerTest {
     }
 
     @Test
+    void quiltLatestStableLoaderInNewestFirstOrder() {
+        api.json("/quilt/v3/versions/loader/1.21.4", "quilt-loaders-1.21.4.json")
+                .json("/quilt/v3/versions/loader", "quilt-loaders.json")
+                .json("/quilt/v3/versions/installer", "quilt-installers.json", "sha256", "abc");
+
+        assertEquals(new Server.Resolved("0.29.2", api.base + "/files/quilt-installer.jar", null, null),
+                server.resolve(spec("quilt", "latest")));
+    }
+
+    @Test
+    void neoforgeLatestStableForTheGameVersion() {
+        api.json("/neoforge/api/maven/versions/releases/net/neoforged/neoforge", "neoforge-versions.json");
+
+        assertEquals(new Server.Resolved("21.4.158",
+                        api.base + "/neoforge/releases/net/neoforged/neoforge/21.4.158/neoforge-21.4.158-installer.jar",
+                        null, null),
+                server.resolve(spec("neoforge", "latest")));
+        assertEquals("21.5.1-beta",
+                server.resolve(new Manifest.ServerSpec("neoforge", "1.21.5", null)).build(), "beta when nothing else");
+        assertThrows(EvokerException.class, () -> server.resolve(new Manifest.ServerSpec("neoforge", "1.20", null)));
+    }
+
+    @Test
+    void neoforgeVersionPrefixes() {
+        assertEquals("21.4", Server.neoforgePrefix("1.21.4"));
+        assertEquals("21.0", Server.neoforgePrefix("1.21"));
+        assertEquals("26.3.0", Server.neoforgePrefix("26.3"));
+        assertEquals("26.1.2", Server.neoforgePrefix("26.1.2"));
+    }
+
+    @Test
     void notYetSupported() {
         var e = assertThrows(EvokerException.class, () -> server.resolve(spec("spigot", "latest")));
         assertTrue(e.getMessage().contains("not supported yet"), e.getMessage());
     }
 
     @Test
-    void launchCommand() {
+    void launchCommands(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {
         var settings = new Manifest.Settings(false, false, "/opt/java", List.of("-Xmx4G"));
-        assertEquals(List.of("/opt/java", "-Xmx4G", "-jar", "server.jar", "nogui"), Server.command("paper", settings));
-        assertEquals("fabric-server-launch.jar", Server.command("fabric", settings).get(3));
+        assertEquals(List.of("/opt/java", "-Xmx4G", "-jar", "server.jar", "nogui"),
+                Server.command(locked("paper", "232"), settings, dir));
+        assertEquals("fabric-server-launch.jar", Server.command(locked("fabric", "0.19.5"), settings, dir).get(3));
+        assertEquals("quilt-server-launch.jar", Server.command(locked("quilt", "0.29.2"), settings, dir).get(3));
+        String args = System.getProperty("os.name").startsWith("Windows") ? "win_args.txt" : "unix_args.txt";
+        assertEquals(List.of("/opt/java", "-Xmx4G", "@libraries/net/neoforged/neoforge/21.4.158/" + args, "nogui"),
+                Server.command(locked("neoforge", "21.4.158"), settings, dir));
+    }
+
+    private static Lock.Locked locked(String software, String build) {
+        return new Lock.Locked(software, "1.21.4", build, "https://x", "sha");
     }
 }

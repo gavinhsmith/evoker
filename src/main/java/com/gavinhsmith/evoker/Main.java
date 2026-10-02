@@ -109,13 +109,18 @@ public final class Main {
             # Downloaded by evoker (rebuilt from evoker.lock)
             server.jar
             fabric-server-launch.jar
+            quilt-server-launch.jar
+            *-installer.jar
+            *-installer.jar.log
+            .evoker-*
+            run.sh
+            run.bat
             mods/modrinth-*.jar
             mods/hangar-*.jar
             mods/url-*.jar
             plugins/modrinth-*.jar
             plugins/hangar-*.jar
             plugins/url-*.jar
-            .evoker-*.tmp
 
             # Recreated by the server
             libraries/
@@ -154,7 +159,10 @@ public final class Main {
     private void initGit() {
         try {
             if (!Files.exists(dir.resolve(".git"))) {
-                Process p = new ProcessBuilder("git", "init").directory(dir.toFile()).inheritIO().start();
+                Process p = new ProcessBuilder("git", "init").directory(dir.toFile())
+                        .redirectOutput(ProcessBuilder.Redirect.INHERIT).redirectError(ProcessBuilder.Redirect.INHERIT)
+                        .start();
+                p.getOutputStream().close(); // git needs no input; don't hand it ours
                 if (p.waitFor() != 0) warn("git init failed");
             }
         } catch (IOException e) {
@@ -367,6 +375,7 @@ public final class Main {
         String label = locked.software() + " " + locked.version() + (locked.build() == null ? "" : " build " + locked.build());
         locked = locked.withSha256(installer.fetch(label, locked.url(), dir.resolve(Server.jarName(locked.software())),
                 locked.sha256(), download == null ? null : download.algo(), download == null ? null : download.hash()));
+        Server.runInstaller(dir, locked, manifest.evoker());
 
         String levelName = installer.levelName();
         var entries = new TreeMap<String, Lock.Entry>();
@@ -431,7 +440,7 @@ public final class Main {
                     + (have.build() == null ? "" : " build " + have.build()));
             return have;
         }
-        if (!stale && resolved.url().equals(have.url())) return have;
+        if (!stale && resolved.url().equals(have.url()) && Objects.equals(resolved.build(), have.build())) return have;
         download[0] = resolved;
         return new Lock.Locked(want.software(), want.version(), resolved.build(), resolved.url(), null);
     }
@@ -454,8 +463,8 @@ public final class Main {
     int start() {
         Manifest manifest = Manifest.read(dir);
         Manifest.Settings settings = manifest.evoker();
-        install(manifest, settings.autoUpdateServer(), key -> settings.autoUpdateDeps());
-        var command = Server.command(manifest.server().software(), settings);
+        Lock lock = install(manifest, settings.autoUpdateServer(), key -> settings.autoUpdateDeps());
+        var command = Server.command(lock.server(), settings, dir);
         log("starting " + String.join(" ", command));
         Process process;
         try {

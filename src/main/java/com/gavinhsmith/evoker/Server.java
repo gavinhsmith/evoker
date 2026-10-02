@@ -1,6 +1,10 @@
 package com.gavinhsmith.evoker;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
 
@@ -23,22 +27,79 @@ final class Server {
             case "paper" -> paper(spec.version(), spec.build());
             case "purpur" -> purpur(spec.version(), spec.build());
             case "fabric" -> fabric(spec.version(), spec.build());
-            case "spigot", "quilt", "neoforge" ->
-                    throw new EvokerException(spec.software() + " is not supported yet");
+            case "quilt" -> quilt(spec.version(), spec.build());
+            case "neoforge" -> neoforge(spec.version(), spec.build());
+            case "spigot" -> throw new EvokerException("spigot is not supported yet");
             default -> throw new EvokerException("unknown server software: " + spec.software());
         };
     }
 
-    /** The jar evoker downloads. Fabric's launcher downloads vanilla into server.jar itself. */
+    /**
+     * The jar evoker downloads: the server itself, or for quilt/neoforge the installer that builds it.
+     * Fabric's launcher and the Quilt installer put vanilla into server.jar themselves.
+     */
     static String jarName(String software) {
-        return software.equals("fabric") ? "fabric-server-launch.jar" : "server.jar";
+        return switch (software) {
+            case "fabric" -> "fabric-server-launch.jar";
+            case "quilt" -> "quilt-installer.jar";
+            case "neoforge" -> "neoforge-installer.jar";
+            default -> "server.jar";
+        };
     }
 
-    static List<String> command(String software, Manifest.Settings settings) {
+    static final String STAMP = ".evoker-installed";
+    static final String INSTALLER_LOG = ".evoker-installer.log";
+
+    /**
+     * For installer-based software, runs the installer unless the stamp file says this exact
+     * software/version/build is already installed. Other software needs nothing.
+     */
+    static void runInstaller(Path dir, Lock.Locked locked, Manifest.Settings settings) {
+        List<String> args = switch (locked.software()) {
+            case "quilt" -> List.of("install", "server", locked.version(), locked.build(), "--download-server",
+                    "--install-dir=.");
+            case "neoforge" -> List.of("--installServer", ".");
+            default -> null;
+        };
+        if (args == null) return;
+        String stamp = locked.software() + " " + locked.version() + " " + locked.build() + " " + locked.sha256();
+        Path stampFile = dir.resolve(STAMP);
+        try {
+            if (Files.exists(stampFile) && Files.readString(stampFile).equals(stamp)) return;
+            var command = new ArrayList<>(List.of(settings.java(), "-jar", jarName(locked.software())));
+            command.addAll(args);
+            Main.log("running the " + locked.software() + " installer (output in " + INSTALLER_LOG + ")");
+            Process p = new ProcessBuilder(command).directory(dir.toFile()).redirectErrorStream(true)
+                    .redirectOutput(dir.resolve(INSTALLER_LOG).toFile()).start();
+            p.getOutputStream().close(); // installers need no input
+            int exit = p.waitFor();
+            if (exit != 0) {
+                throw new EvokerException(locked.software() + " installer failed (exit " + exit + "); see " + INSTALLER_LOG);
+            }
+            Files.writeString(stampFile, stamp);
+        } catch (IOException e) {
+            throw new EvokerException("cannot run the " + locked.software() + " installer: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new EvokerException("interrupted", e);
+        }
+    }
+
+    static List<String> command(Lock.Locked locked, Manifest.Settings settings, Path dir) {
         var command = new ArrayList<String>();
         command.add(settings.java());
         command.addAll(settings.jvmArgs());
-        command.addAll(List.of("-jar", jarName(software), "nogui"));
+        switch (locked.software()) {
+            case "quilt" -> command.addAll(List.of("-jar", "quilt-server-launch.jar"));
+            case "neoforge" -> {
+                // What NeoForge's own run.sh / run.bat do.
+                if (Files.exists(dir.resolve("user_jvm_args.txt"))) command.add("@user_jvm_args.txt");
+                String args = System.getProperty("os.name").startsWith("Windows") ? "win_args.txt" : "unix_args.txt";
+                command.add("@libraries/net/neoforged/neoforge/" + locked.build() + "/" + args);
+            }
+            default -> command.addAll(List.of("-jar", jarName(locked.software())));
+        }
+        command.add("nogui");
         return command;
     }
 
@@ -105,6 +166,61 @@ final class Server {
         // Fabric publishes no checksum for the launcher jar; evoker's own sha256 still pins it.
         return new Resolved(loader, base + "/loader/" + version + "/" + loader + "/" + installer + "/server/jar",
                 null, null);
+    }
+
+    /** Quilt: the loader version, installed by the Quilt installer (which also fetches vanilla). */
+    private Resolved quilt(String version, String loader) {
+        String base = apis.quilt() + "/v3/versions";
+        var available = new HashSet<String>();
+        http.json(base + "/loader/" + version).forEach(l -> available.add(l.path("loader").path("version").asString()));
+        if (available.isEmpty()) throw new EvokerException("quilt has no loader for " + version);
+        if (loader.equals("latest")) {
+            // The per-version list is unordered; the global list is newest first.
+            String newest = null;
+            for (JsonNode l : http.json(base + "/loader")) {
+                String v = l.path("version").asString();
+                if (!available.contains(v)) continue;
+                if (newest == null) newest = v;
+                if (!v.contains("-")) {
+                    newest = v;
+                    break;
+                }
+            }
+            loader = newest != null ? newest : available.iterator().next();
+        }
+        // Quilt meta's installer "hashes" don't match the published jar (checked 2026-10), so they aren't verified;
+        // evoker's own sha256 still pins the installer in the lock.
+        JsonNode installer = http.json(base + "/installer").get(0);
+        return new Resolved(loader, installer.path("url").asString(), null, null);
+    }
+
+    /** NeoForge: versions are named after the game version (1.21.4 → 21.4.x, 26.1 → 26.1.0.x). */
+    private Resolved neoforge(String version, String build) {
+        if (build.equals("latest")) {
+            String prefix = neoforgePrefix(version) + ".";
+            String newest = null, newestStable = null;
+            for (JsonNode v : http.json(apis.neoforge() + "/api/maven/versions/releases/net/neoforged/neoforge")
+                    .path("versions")) {
+                String name = v.asString();
+                if (!name.startsWith(prefix)) continue;
+                newest = name; // oldest first, so the last match is the newest
+                if (!name.contains("-")) newestStable = name;
+            }
+            if (newest == null) throw new EvokerException("neoforge has no version for " + version);
+            build = newestStable != null ? newestStable : newest;
+        }
+        // ponytail: no upstream checksum fetched; evoker's own sha256 still pins the installer
+        return new Resolved(build, apis.neoforge() + "/releases/net/neoforged/neoforge/" + build + "/neoforge-"
+                + build + "-installer.jar", null, null);
+    }
+
+    static String neoforgePrefix(String version) {
+        String v = version.startsWith("1.") ? version.substring(2) : version;
+        boolean old = version.startsWith("1.");
+        long dots = v.chars().filter(c -> c == '.').count();
+        if (old && dots == 0) return v + ".0";
+        if (!old && dots == 1) return v + ".0";
+        return v;
     }
 
     private static JsonNode stableOrFirst(JsonNode list, String field) {

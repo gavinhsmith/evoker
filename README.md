@@ -56,7 +56,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | `update` / `upgrade`, auto-updates | ✅ |
 | Hangar + URL sources | ✅ |
 | `init --git` | ✅ |
-| quilt, neoforge | planned |
+| quilt, neoforge | ✅ |
 | spigot | planned |
 
 ## Contributing

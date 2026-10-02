@@ -15,7 +15,7 @@ class LiveTest {
     final Server server = new Server(new Http(), Apis.DEFAULT);
 
     @ParameterizedTest
-    @ValueSource(strings = {"vanilla", "paper", "purpur", "fabric"})
+    @ValueSource(strings = {"vanilla", "paper", "purpur", "fabric", "quilt", "neoforge"})
     void resolvesServerSoftware(String software) {
         var resolved = server.resolve(new Manifest.ServerSpec(software, "1.21.4", "latest"));
         assertTrue(resolved.url().startsWith("https://"), resolved.url());
