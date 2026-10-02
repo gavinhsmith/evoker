@@ -47,7 +47,7 @@ Files are named after the project id, never the upstream filename, so updating a
 | Type | Path |
 |---|---|
 | mod | `mods/modrinth-<projectId>.jar` |
-| plugin | `plugins/modrinth-<projectId>.jar` |
+| plugin | `plugins/modrinth-<projectId>.jar` (Hangar: `hangar-<projectId>.jar`, URL: `url-<name>.jar`) |
 | data pack | `<level-name>/datapacks/modrinth-<projectId>.zip` (`level-name` from `server.properties`, default `world`) |
 | resource pack | not downloaded; see below |
 
@@ -71,7 +71,36 @@ Required dependencies are installed automatically and recursively. They go into 
 - A dependency hosted outside Modrinth can't be installed automatically; evoker warns so you can add it yourself.
 - `remove` deletes an entry and every dependency nothing else needs anymore.
 
-## Coming
+## Hangar
 
-- **Hangar** (`hangar:`) for Paper plugins
-- **URL** (`url:`) for anything else
+Paper plugins from [hangar.papermc.io](https://hangar.papermc.io), keyed `hangar:<slug>` (the slug is case-sensitive, as shown on Hangar):
+
+```sh
+evoker add hangar:ViaVersion
+```
+
+- Only on `paper` and `purpur` (Hangar plugins may use Paper-only APIs).
+- `latest` is the newest version in the **Release** channel for your game version, or the newest version of any channel (snapshots) if there is no release. A pinned value is the Hangar version name, e.g. `5.0.3`.
+- Required plugin dependencies hosted on Hangar are installed automatically like Modrinth dependencies. Ones that only link elsewhere produce a warning; add them yourself.
+- Some Hangar versions are only an external link with no checksum. evoker still hashes the file it downloads and pins it in the lock.
+- Files: `plugins/hangar-<projectId>.jar`.
+
+## URL
+
+Any file from a URL, for things on neither Modrinth nor Hangar:
+
+```sh
+evoker add https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot --type plugin --name geyser
+```
+
+```json
+"url:geyser": { "url": "https://…/spigot", "type": "plugin" }
+```
+
+- `--type` is **required**: `mod`, `plugin`, `datapack` or `resourcepack`.
+- `--name` defaults to the file name in the URL. It becomes the key (`url:<name>`) and the file name (`url-<name>.jar`).
+- No dependencies and no version checks. The lock pins the file by its SHA-256.
+- `install` re-downloading a file that no longer matches the lock (the file at that URL changed) keeps your existing file and warns.
+- `update` / `upgrade` re-download URL entries and accept the new file, so "latest" style links work. Links to a fixed version never change.
+- A `resourcepack` URL is downloaded once to compute the SHA-1 for `server.properties`, then deleted.
+- Plain `http://` works, with a warning.

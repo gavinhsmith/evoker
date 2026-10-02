@@ -27,15 +27,23 @@ class LiveTest {
     @Test
     void modrinthModWithRequiredDependency() {
         // Mod Menu requires Fabric API (P7dR8mSH)
-        var r = modrinth.resolve("modmenu", "latest", null, new Manifest.ServerSpec("fabric", "1.21.4", null));
+        var r = modrinth.resolve("modmenu", new Manifest.Content("latest", null, null), null, new Manifest.ServerSpec("fabric", "1.21.4", null));
         assertEquals("mod", r.entry().type());
         assertTrue(r.dependencies().contains(new Source.Dependency("P7dR8mSH", null, false)), r.dependencies().toString());
     }
 
     @Test
+    void hangarPlugin() {
+        var r = new Hangar(new Http(), Apis.DEFAULT.hangar()).resolve("ViaVersion",
+                new Manifest.Content("latest", null, null), null, new Manifest.ServerSpec("paper", "1.21.4", null));
+        assertEquals("plugin", r.entry().type());
+        assertTrue(r.entry().url().startsWith("https://"), r.entry().url());
+    }
+
+    @Test
     void modrinthPluginAndResourcePack() {
         var paper = new Manifest.ServerSpec("paper", "1.21.4", null);
-        assertEquals("plugin", modrinth.resolve("luckperms", "latest", null, paper).entry().type());
-        assertEquals("resourcepack", modrinth.resolve("faithful-32x", "latest", null, paper).entry().type());
+        assertEquals("plugin", modrinth.resolve("luckperms", new Manifest.Content("latest", null, null), null, paper).entry().type());
+        assertEquals("resourcepack", modrinth.resolve("faithful-32x", new Manifest.Content("latest", null, null), null, paper).entry().type());
     }
 }

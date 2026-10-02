@@ -18,7 +18,7 @@ final class Modrinth implements Source {
     }
 
     @Override
-    public Resolution resolve(String ref, String version, String exactVersionId, Manifest.ServerSpec server) {
+    public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.ServerSpec server) {
         JsonNode project = http.jsonOrNull(api + "/project/" + enc(ref));
         if (project == null) throw new EvokerException("no Modrinth project \"" + ref + "\"");
         String slug = project.path("slug").asString();
@@ -28,7 +28,7 @@ final class Modrinth implements Source {
         }
         JsonNode chosen = exactVersionId != null
                 ? http.json(api + "/version/" + enc(exactVersionId))
-                : choose(slug, project.path("id").asString(), version, server);
+                : choose(slug, project.path("id").asString(), wanted.version(), server);
 
         String type = type(chosen, server.software());
         if (type == null) {

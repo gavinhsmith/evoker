@@ -1,8 +1,11 @@
 package com.gavinhsmith.evoker;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +22,9 @@ public final class Main {
     private static final String USAGE = """
             usage: evoker <command>
 
-              add <slug> [version]   add content (e.g. sodium, modrinth:lithium) and install it
+              add <slug> [version]   add content (sodium, modrinth:lithium, hangar:ViaVersion) and install it
+              add <url> --type <mod|plugin|datapack|resourcepack> [--name <name>]
+                                     add a file from a URL
               remove <slug>          remove content and whatever only it needed
               install                download whatever evoker.json / evoker.lock say is missing
               update [slug]          move "latest" entries (and the server build) to their newest versions
@@ -38,7 +43,10 @@ public final class Main {
         this.dir = dir;
         this.server = new Server(http, apis);
         this.installer = new Installer(dir, http);
-        this.resolver = new Resolver(Map.of("modrinth", new Modrinth(http, apis.modrinth())));
+        this.resolver = new Resolver(Map.of(
+                "modrinth", new Modrinth(http, apis.modrinth()),
+                "hangar", new Hangar(http, apis.hangar()),
+                "url", new UrlSource()));
     }
 
     public static void main(String[] args) {
@@ -55,7 +63,7 @@ public final class Main {
         List<String> rest = Arrays.asList(args).subList(1, args.length);
         try {
             switch (args[0]) {
-                case "add" -> main.add(arg(rest, 0, "add <slug> [version]"), rest.size() > 1 ? rest.get(1) : "latest");
+                case "add" -> main.add(rest);
                 case "remove" -> main.remove(arg(rest, 0, "remove <slug>"));
                 case "install" -> main.install(Manifest.read(dir), false, key -> false);
                 case "update" -> main.update(rest.isEmpty() ? null : rest.get(0));
@@ -90,11 +98,51 @@ public final class Main {
         System.err.println("evoker: warning: " + message);
     }
 
-    void add(String ref, String version) {
+    /** add <slug> [version] | add <url> --type <type> [--name <name>] */
+    void add(List<String> args) {
+        var positional = new ArrayList<String>();
+        var flags = new HashMap<String, String>();
+        for (int i = 0; i < args.size(); i++) {
+            String a = args.get(i);
+            if (a.startsWith("--")) {
+                if (i + 1 >= args.size()) throw new EvokerException(a + " needs a value");
+                flags.put(a, args.get(++i));
+            } else {
+                positional.add(a);
+            }
+        }
+        String ref = arg(positional, 0, "add <slug> [version]  or  add <url> --type <type> [--name <name>]");
+        String key;
+        Manifest.Content entry;
+        if (ref.startsWith("https://") || ref.startsWith("http://")) {
+            String type = flags.get("--type");
+            if (type == null || !UrlSource.TYPES.contains(type)) {
+                throw new EvokerException("adding a URL needs --type, one of " + UrlSource.TYPES);
+            }
+            if (ref.startsWith("http://")) warn("downloading over plain http; anyone on the network could swap the file");
+            key = "url:" + flags.getOrDefault("--name", urlName(ref));
+            entry = new Manifest.Content(null, ref, type);
+        } else {
+            key = Manifest.key(ref);
+            entry = new Manifest.Content(positional.size() > 1 ? positional.get(1) : "latest", null, null);
+        }
+        add(key, entry);
+    }
+
+    /** The URL's file name without extension, reduced to characters safe in a file name. */
+    static String urlName(String url) {
+        String path = URI.create(url).getPath();
+        String name = path == null ? "" : path.substring(path.lastIndexOf('/') + 1);
+        if (name.contains(".")) name = name.substring(0, name.lastIndexOf('.'));
+        name = name.replaceAll("[^A-Za-z0-9._-]", "-");
+        if (name.isEmpty()) throw new EvokerException("cannot name " + url + "; pass --name");
+        return name;
+    }
+
+    private void add(String key, Manifest.Content entry) {
         Manifest manifest = Manifest.read(dir);
-        String key = Manifest.key(ref);
         var content = new LinkedHashMap<>(manifest.content());
-        content.put(key, new Manifest.Content(version, null, null));
+        content.put(key, entry);
         Manifest updated = manifest.withContent(content);
         install(updated, false, key::equals);
         updated.write(dir);
@@ -175,13 +223,27 @@ public final class Main {
         int changed = 0;
         for (String key : keys) {
             Lock.Entry x = before.content().get(key), y = after.content().get(key);
-            if (x != null && y != null && x.versionId().equals(y.versionId())) continue;
+            if (x != null && y != null && same(x, y)) continue;
             changed++;
-            if (x == null) log(key + ": added " + y.version());
+            if (x == null) log(key + ": added " + label(y));
             else if (y == null) log(key + ": removed");
+            else if (x.versionId() == null) log(key + ": file changed");
             else log(key + ": " + x.version() + " -> " + y.version());
         }
         log(changed == 0 ? "content is up to date" : changed + " content change(s)");
+        if (keys.stream().anyMatch(k -> k.startsWith("url:"))) {
+            log("url entries are re-downloaded, not version-checked");
+        }
+    }
+
+    /** Same version; url entries (no version) compare by URL and, when known, by hash. */
+    private static boolean same(Lock.Entry x, Lock.Entry y) {
+        if (x.versionId() != null) return x.versionId().equals(y.versionId());
+        return Objects.equals(x.url(), y.url()) && (y.sha256() == null || y.sha256().equals(x.sha256()));
+    }
+
+    private static String label(Lock.Entry e) {
+        return e.version() != null ? e.version() : e.url();
     }
 
     /** What install will do: the resolved server and content, before anything is downloaded. */
@@ -201,7 +263,21 @@ public final class Main {
         Lock before = Lock.read(dir);
         Plan plan = plan(manifest, before, updateServer, refresh);
 
-        var properties = new LinkedHashMap<>(resourcePack(plan.content(), manifest.properties()));
+        // URL resource packs aren't stored, but server.properties needs their SHA-1: hash them once.
+        var content = new TreeMap<>(plan.content());
+        content.replaceAll((key, r) -> {
+            Lock.Entry e = r.entry(), old = before.content().get(key);
+            if (!e.type().equals("resourcepack") || e.sha1() != null) return r;
+            if (old != null && e.url().equals(old.url()) && old.sha1() != null && !refresh.test(key)) {
+                e = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), old.sha256(), old.sha1(), e.requiredBy());
+            } else {
+                Http.Fetched f = installer.hash(key, e.url());
+                e = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), f.sha256(), f.sha1(), e.requiredBy());
+            }
+            return new Source.Resolution(r.slug(), e, r.published(), r.dependencies(), r.algo(), r.hash());
+        });
+
+        var properties = new LinkedHashMap<>(resourcePack(content, manifest.properties()));
         properties.putAll(manifest.properties());
         installer.properties(properties);
         if (manifest.eula()) installer.acceptEula();
@@ -215,13 +291,15 @@ public final class Main {
         String levelName = installer.levelName();
         var entries = new TreeMap<String, Lock.Entry>();
         var paths = new HashSet<Path>();
-        plan.content().forEach((key, r) -> {
+        content.forEach((key, r) -> {
             Lock.Entry e = r.entry();
             Path path = installer.path(key, e, levelName);
             if (path != null) {
                 Lock.Entry old = before.content().get(key);
-                String lockedSha = old != null && Objects.equals(old.url(), e.url()) ? old.sha256() : null;
-                e = e.withSha256(installer.fetch(key + " " + e.version(), e.url(), path, lockedSha, r.algo(), r.hash()));
+                // A refreshed url entry accepts whatever the URL serves now; otherwise the locked hash must match.
+                boolean accept = refresh.test(key) && Resolver.source(key).equals("url");
+                String lockedSha = !accept && old != null && Objects.equals(old.url(), e.url()) ? old.sha256() : null;
+                e = e.withSha256(installer.fetch(key + " " + label(e), e.url(), path, lockedSha, r.algo(), r.hash()));
                 paths.add(path);
             }
             entries.put(key, e);

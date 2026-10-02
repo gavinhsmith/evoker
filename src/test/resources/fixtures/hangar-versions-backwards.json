@@ -1,0 +1,12 @@
+{
+  "pagination": {"count": 1, "limit": 25, "offset": 0},
+  "result": [
+    {
+      "id": 200, "projectId": 12, "name": "5.0.0", "createdAt": "2026-01-01T00:00:00Z",
+      "channel": {"name": "Release"},
+      "downloads": {"PAPER": {"fileInfo": null, "externalUrl": "{base}/files/backwards.jar", "downloadUrl": null}},
+      "pluginDependencies": {"PAPER": []},
+      "platformDependencies": {"PAPER": ["1.21.4"]}
+    }
+  ]
+}

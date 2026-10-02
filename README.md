@@ -33,8 +33,9 @@ Describe your server in `evoker.json`:
 Then:
 
 ```sh
-java -jar evoker.jar add luckperms   # Modrinth content, dependencies included
-java -jar evoker.jar start           # download what's missing, write evoker.lock, run the server
+java -jar evoker.jar add luckperms            # Modrinth content, dependencies included
+java -jar evoker.jar add hangar:ViaVersion    # Hangar plugins
+java -jar evoker.jar start                    # download what's missing, write evoker.lock, run the server
 ```
 
 Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wiki).
@@ -47,7 +48,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | `install` / `start` (vanilla, paper, purpur, fabric) | ✅ |
 | `add` / `remove`, Modrinth content, dependency resolution | ✅ |
 | `update` / `upgrade`, auto-updates | ✅ |
-| Hangar + URL sources | planned |
+| Hangar + URL sources | ✅ |
 | `init --git` | planned |
 | quilt, neoforge | planned |
 | spigot | planned |

@@ -35,7 +35,7 @@ class ModrinthTest {
     @Test
     void latestPrefersReleasesAndTheSoftwaresOwnLoader() {
         alpha();
-        Source.Resolution r = modrinth.resolve("alpha", "latest", null, on("fabric"));
+        Source.Resolution r = modrinth.resolve("alpha", new Manifest.Content("latest", null, null), null, on("fabric"));
 
         assertEquals("alpha", r.slug());
         assertEquals(new Lock.Entry("mod", "AAAA", "a2", "2.0", api.base + "/files/alpha-2.jar", null, "a2sha1", null),
@@ -48,7 +48,7 @@ class ModrinthTest {
     void keepsRequiredAndIncompatibleDependenciesOnly() {
         alpha();
         String err = Stderr.capture(() -> {
-            var r = modrinth.resolve("alpha", "latest", null, on("fabric"));
+            var r = modrinth.resolve("alpha", new Manifest.Content("latest", null, null), null, on("fabric"));
             assertEquals(List.of(new Source.Dependency("BBBB", null, false), new Source.Dependency("DDDD", null, true)),
                     r.dependencies());
         });
@@ -58,13 +58,13 @@ class ModrinthTest {
     @Test
     void quiltAlsoAcceptsFabricMods() {
         alpha();
-        assertEquals("a2", modrinth.resolve("alpha", "latest", null, on("quilt")).entry().versionId());
+        assertEquals("a2", modrinth.resolve("alpha", new Manifest.Content("latest", null, null), null, on("quilt")).entry().versionId());
     }
 
     @Test
     void vanillaGetsTheDataPack() {
         alpha();
-        Lock.Entry e = modrinth.resolve("alpha", "latest", null, on("vanilla")).entry();
+        Lock.Entry e = modrinth.resolve("alpha", new Manifest.Content("latest", null, null), null, on("vanilla")).entry();
         assertEquals("datapack", e.type());
         assertEquals("a2d", e.versionId());
     }
@@ -72,7 +72,7 @@ class ModrinthTest {
     @Test
     void pinnedVersion() {
         alpha();
-        assertEquals("a1", modrinth.resolve("alpha", "1.0", null, on("fabric")).entry().versionId());
+        assertEquals("a1", modrinth.resolve("alpha", new Manifest.Content("1.0", null, null), null, on("fabric")).entry().versionId());
     }
 
     @Test
@@ -82,21 +82,21 @@ class ModrinthTest {
                         {"id": "b1", "project_id": "BBBB", "version_number": "1.0", "date_published": "x",
                          "loaders": ["fabric"], "files": [{"url": "u", "primary": true, "hashes": {}}]}
                         """.getBytes());
-        assertEquals("1.0", modrinth.resolve("beta", "latest", "b1", on("fabric")).entry().version());
+        assertEquals("1.0", modrinth.resolve("beta", new Manifest.Content("latest", null, null), "b1", on("fabric")).entry().version());
     }
 
     @Test
     void pluginOnPaperAndClientOnlyWarning() {
         mixed();
         String err = Stderr.capture(() ->
-                assertEquals("plugin", modrinth.resolve("shiny", "latest", null, on("purpur")).entry().type()));
+                assertEquals("plugin", modrinth.resolve("shiny", new Manifest.Content("latest", null, null), null, on("purpur")).entry().type()));
         assertTrue(err.contains("client-side only"), err);
     }
 
     @Test
     void resourcePackWhenNothingElseFits() {
         mixed();
-        Lock.Entry e = modrinth.resolve("shiny", "latest", null, on("fabric")).entry();
+        Lock.Entry e = modrinth.resolve("shiny", new Manifest.Content("latest", null, null), null, on("fabric")).entry();
         assertEquals("resourcepack", e.type());
         assertEquals("packsha1", e.sha1());
     }
@@ -105,13 +105,13 @@ class ModrinthTest {
     void noCompatibleVersion() {
         api.json("/modrinth/v2/project/beta", "modrinth-project-beta.json")
                 .bytes(modrinthVersions("BBBB", "1.21.4"), "[]".getBytes());
-        var e = assertThrows(EvokerException.class, () -> modrinth.resolve("beta", "latest", null, on("paper")));
+        var e = assertThrows(EvokerException.class, () -> modrinth.resolve("beta", new Manifest.Content("latest", null, null), null, on("paper")));
         assertTrue(e.getMessage().contains("has no version for paper 1.21.4"), e.getMessage());
     }
 
     @Test
     void unknownProject() {
-        var e = assertThrows(EvokerException.class, () -> modrinth.resolve("nope", "latest", null, on("fabric")));
+        var e = assertThrows(EvokerException.class, () -> modrinth.resolve("nope", new Manifest.Content("latest", null, null), null, on("fabric")));
         assertTrue(e.getMessage().contains("no Modrinth project"), e.getMessage());
     }
 }

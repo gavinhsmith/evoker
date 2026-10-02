@@ -82,6 +82,14 @@ final class Installer {
         }
     }
 
+    /** Downloads url only to hash it (for files evoker doesn't store, like resource packs). */
+    Http.Fetched hash(String label, String url) {
+        Main.log("hashing " + label);
+        Http.Fetched fetched = http.download(url, dir, null, null);
+        Http.deleteQuietly(fetched.file());
+        return fetched;
+    }
+
     /** Sets the given keys in server.properties, leaving every other key alone. Writes only on change. */
     void properties(Map<String, Object> wanted) {
         if (wanted.isEmpty()) return;

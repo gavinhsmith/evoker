@@ -27,7 +27,8 @@ class ResolverTest {
         }
 
         @Override
-        public Resolution resolve(String ref, String version, String exactVersionId, Manifest.ServerSpec server) {
+        public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.ServerSpec server) {
+            String version = wanted.version();
             calls.add(ref);
             List<V> versions = projects.get(ref);
             if (versions.isEmpty()) throw new EvokerException(ref + " has no version");

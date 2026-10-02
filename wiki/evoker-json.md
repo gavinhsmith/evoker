@@ -37,12 +37,14 @@ Keys to set in `server.properties`. They are **enforced**: every `install`/`star
 
 ## `content`
 
-Mods, plugins, data packs and resource packs, keyed `source:slug` (no prefix means `modrinth`). The value is `"latest"` or a pinned version. Usually managed with `evoker add` / `evoker remove`.
+Mods, plugins, data packs and resource packs, keyed `source:slug` (no prefix means `modrinth`; sources are `modrinth`, `hangar` and `url`). The value is `"latest"` or a pinned version; `url` entries hold `{ "url", "type" }` instead. Usually managed with `evoker add` / `evoker remove`.
 
 ```json
 "content": {
   "modrinth:lithium": "latest",
-  "modrinth:terralith": "2.5.8"
+  "modrinth:terralith": "2.5.8",
+  "hangar:ViaVersion": "5.0.3",
+  "url:geyser": { "url": "https://…/Geyser-Spigot.jar", "type": "plugin" }
 }
 ```
 

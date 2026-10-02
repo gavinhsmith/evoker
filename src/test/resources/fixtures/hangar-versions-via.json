@@ -1,0 +1,16 @@
+{
+  "pagination": {"count": 1, "limit": 1, "offset": 0},
+  "result": [
+    {
+      "id": 500, "projectId": 31, "name": "5.0.3", "createdAt": "2026-01-01T00:00:00Z",
+      "channel": {"name": "Release"},
+      "downloads": {"PAPER": {"fileInfo": {"name": "ViaVersion.jar", "sha256Hash": "{sha256}"}, "externalUrl": null, "downloadUrl": "{base}/files/via.jar"}},
+      "pluginDependencies": {"PAPER": [
+        {"name": "ViaBackwards", "projectId": 12, "required": true, "externalUrl": null, "platform": "PAPER"},
+        {"name": "ViaRewind", "projectId": 112, "required": false, "externalUrl": null, "platform": "PAPER"},
+        {"name": "ProtocolLib", "projectId": null, "required": true, "externalUrl": "https://example.com/protocollib", "platform": "PAPER"}
+      ]},
+      "platformDependencies": {"PAPER": ["1.21.3", "1.21.4"]}
+    }
+  ]
+}

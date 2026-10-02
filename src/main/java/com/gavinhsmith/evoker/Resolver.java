@@ -13,6 +13,8 @@ import java.util.function.Predicate;
 
 /** Resolves evoker.json content, and every required dependency recursively, into lock entries. */
 final class Resolver {
+    static final Manifest.Content LATEST = new Manifest.Content("latest", null, null);
+
     private final Map<String, Source> sources;
 
     Resolver(Map<String, Source> sources) {
@@ -26,7 +28,7 @@ final class Resolver {
      */
     Map<String, Source.Resolution> resolve(Manifest manifest, Map<String, Lock.Entry> locked,
                                            Predicate<String> refresh) {
-        record Job(String key, String source, String ref, String version, String exactVersionId, String parent) {}
+        record Job(String key, String source, String ref, Manifest.Content wanted, String exactVersionId, String parent) {}
 
         var lockedByProject = new HashMap<String, String>();
         locked.forEach((key, e) -> lockedByProject.put(source(key) + ":" + e.projectId(), key));
@@ -35,7 +37,7 @@ final class Resolver {
         manifest.content().forEach((key, content) -> {
             Lock.Entry have = locked.get(key);
             String exact = have != null && !refresh.test(key) && satisfies(have, content) ? have.versionId() : null;
-            queue.add(new Job(key, source(key), ref(key), content.version(), exact, null));
+            queue.add(new Job(key, source(key), ref(key), content, exact, null));
         });
 
         var resolved = new LinkedHashMap<String, Source.Resolution>();
@@ -53,7 +55,7 @@ final class Resolver {
                 Source.Resolution have = resolved.get(key);
                 if (job.exactVersionId() == null || job.exactVersionId().equals(have.entry().versionId())
                         || manifest.content().containsKey(key)) continue;
-                r = sourceNamed(job.source()).resolve(job.ref(), "latest", job.exactVersionId(), manifest.server());
+                r = sourceNamed(job.source()).resolve(job.ref(), LATEST, job.exactVersionId(), manifest.server());
                 String newer = r.published().compareTo(have.published()) > 0 ? r.entry().version() : have.entry().version();
                 Main.warn(key + ": " + job.parent() + " wants " + r.entry().version() + ", another entry wants "
                         + have.entry().version() + "; using the newer " + newer);
@@ -69,7 +71,7 @@ final class Resolver {
                     exact = locked.get(lockedKey).versionId();
                 }
                 try {
-                    r = sourceNamed(job.source()).resolve(job.ref(), job.version(), exact, manifest.server());
+                    r = sourceNamed(job.source()).resolve(job.ref(), job.wanted(), exact, manifest.server());
                 } catch (EvokerException e) {
                     // Nothing compatible (or upstream trouble): keep what is installed and let the user decide.
                     if (lockedKey == null) throw e;
@@ -85,7 +87,7 @@ final class Resolver {
                 if (d.incompatible()) {
                     incompatible.add(new String[] {key, job.source() + ":" + d.projectId()});
                 } else {
-                    queue.add(new Job(null, job.source(), d.projectId(), "latest", d.versionId(), key));
+                    queue.add(new Job(null, job.source(), d.projectId(), LATEST, d.versionId(), key));
                 }
             }
         }
@@ -148,6 +150,7 @@ final class Resolver {
 
     /** Does the locked entry still match what evoker.json asks for? */
     static boolean satisfies(Lock.Entry locked, Manifest.Content wanted) {
+        if (wanted.url() != null) return wanted.url().equals(locked.url()) && wanted.type().equals(locked.type());
         return wanted.version() == null || wanted.version().equals("latest")
                 || wanted.version().equals(locked.version()) || wanted.version().equals(locked.versionId());
     }

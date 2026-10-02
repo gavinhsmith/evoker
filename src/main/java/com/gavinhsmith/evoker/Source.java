@@ -7,11 +7,11 @@ interface Source {
     /**
      * Resolves one project to one version.
      *
-     * @param ref            slug or project id
-     * @param version        "latest" or a pinned version, used when exactVersionId is null
+     * @param ref            slug or project id (for url entries, the entry name)
+     * @param wanted         the evoker.json entry: "latest", a pinned version, or {url, type}
      * @param exactVersionId a specific version id (from the lock or a dependency), or null
      */
-    Resolution resolve(String ref, String version, String exactVersionId, Manifest.ServerSpec server);
+    Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.ServerSpec server);
 
     /**
      * A resolved version. entry has no sha256/requiredBy yet; algo/hash are the upstream checksum for the download.
