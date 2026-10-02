@@ -1,4 +1,4 @@
-# evoker
+<p align="center"><img src="https://raw.githubusercontent.com/gavinhsmith/evoker/main/.github/logo.svg" alt="evoker" width="480"></p>
 
 evoker manages a Minecraft server's dependencies: the server jar, mods, plugins, data packs and resource packs.
 

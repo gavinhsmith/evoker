@@ -1,6 +1,6 @@
 <div align="center">
 
-# evoker
+<h1><img src=".github/logo.svg" alt="evoker" width="480"></h1>
 
 **A package manager for Minecraft servers.**
 
