@@ -9,7 +9,7 @@ Manage your Minecraft server dependencies (server jar, mods, plugins, data packs
 
 You describe the server in `evoker.json`, evoker records exactly what it installed in `evoker.lock`, and it runs the server as a child process.
 
-> evoker is in early development. Features land milestone by milestone; see [Status](#status).
+> evoker is in early development; see [Status](#status).
 
 ## Install
 
@@ -57,7 +57,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | Hangar + URL sources | ✅ |
 | `init --git` | ✅ |
 | quilt, neoforge | ✅ |
-| spigot | planned |
+| spigot (via BuildTools) | ✅ |
 
 ## Contributing
 

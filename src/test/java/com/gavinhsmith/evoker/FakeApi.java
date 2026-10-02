@@ -41,7 +41,7 @@ final class FakeApi implements AutoCloseable {
 
     Apis apis() {
         return new Apis(base + "/mojang", base + "/paper", base + "/purpur", base + "/fabric", base + "/quilt",
-                base + "/neoforge", base + "/modrinth",
+                base + "/neoforge", base + "/spigot", base + "/modrinth",
                 base + "/hangar");
     }
 

@@ -57,7 +57,7 @@ The `.gitignore` written by `init --git` ignores what evoker or the server can r
 
 | Ignored | Tracked |
 |---|---|
-| `server.jar`, `fabric-server-launch.jar`, `quilt-server-launch.jar`, `*-installer.jar`, `run.sh`, `run.bat`, `.evoker-*` | `evoker.json`, `evoker.lock`, `user_jvm_args.txt` |
+| `server.jar`, `fabric-server-launch.jar`, `quilt-server-launch.jar`, `*-installer.jar`, `BuildTools.jar`, `run.sh`, `run.bat`, `.evoker-*` | `evoker.json`, `evoker.lock`, `user_jvm_args.txt` |
 | evoker-managed jars: `mods/` and `plugins/` files named `modrinth-*`, `hangar-*`, `url-*` | jars you drop into `mods/` or `plugins/` yourself |
 | `libraries/`, `versions/`, `cache/`, `.fabric/`, `.quilt/`, `plugins/.paper-remapped/` | `server.properties`, `config/`, `plugins/<plugin>/` config folders |
 | `logs/`, `crash-reports/`, `debug/`, `usercache.json` | `ops.json`, `whitelist.json`, ban lists |

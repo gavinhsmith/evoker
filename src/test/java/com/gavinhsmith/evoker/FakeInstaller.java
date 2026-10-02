@@ -16,6 +16,9 @@ public class FakeInstaller {
         Files.writeString(Path.of(ARGS), String.join(" ", args));
         if (args[0].equals("install")) {
             Files.write(Path.of("quilt-server-launch.jar"), FakeServer.jar());
+        } else if (args[0].equals("--rev")) {
+            // BuildTools: --rev <build> --compile spigot --output-dir <dir> --final-name <name> --nogui
+            Files.write(Path.of(args[5], args[7]), FakeServer.jar());
         } else {
             String build;
             try (InputStream in = FakeInstaller.class.getResourceAsStream("/neoforge-build.txt")) {

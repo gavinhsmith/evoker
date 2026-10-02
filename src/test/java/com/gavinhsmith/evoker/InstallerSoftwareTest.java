@@ -78,6 +78,28 @@ class InstallerSoftwareTest {
     }
 
     @Test
+    void spigotIsBuiltWithBuildTools() throws IOException {
+        byte[] buildTools = FakeServer.jar(FakeInstaller.class, Map.of());
+        api.bytes("/spigot/versions/1.21.4.json", "{\"name\": \"4458\"}".getBytes())
+                .bytes("/spigot/jenkins/job/BuildTools/lastSuccessfulBuild/api/json", "{\"number\": 201}".getBytes())
+                .bytes("/spigot/jenkins/job/BuildTools/201/artifact/target/BuildTools.jar", buildTools);
+        manifest("spigot");
+
+        assertEquals(FakeServer.EXIT_CODE, run("start"));
+
+        String args = Files.readString(dir.resolve(Server.BUILDTOOLS_DIR).resolve(FakeInstaller.ARGS));
+        assertTrue(args.startsWith("--rev 4458 --compile spigot --output-dir "), args);
+        assertTrue(args.endsWith("--final-name server.jar --nogui"), args);
+        assertEquals("nogui", Files.readString(dir.resolve(FakeServer.MARKER)));
+        assertEquals("4458", Lock.read(dir).server().build());
+
+        // A newer BuildTools alone doesn't trigger a rebuild.
+        api.bytes("/spigot/jenkins/job/BuildTools/lastSuccessfulBuild/api/json", "{\"number\": 202}".getBytes());
+        assertEquals(0, run("update"));
+        assertTrue(Lock.read(dir).server().url().endsWith("/201/artifact/target/BuildTools.jar"));
+    }
+
+    @Test
     void failingInstallerIsAnError() throws IOException {
         byte[] broken = "not a jar".getBytes();
         api.json("/neoforge/api/maven/versions/releases/net/neoforged/neoforge", "neoforge-versions.json")

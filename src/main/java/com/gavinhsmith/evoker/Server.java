@@ -29,13 +29,13 @@ final class Server {
             case "fabric" -> fabric(spec.version(), spec.build());
             case "quilt" -> quilt(spec.version(), spec.build());
             case "neoforge" -> neoforge(spec.version(), spec.build());
-            case "spigot" -> throw new EvokerException("spigot is not supported yet");
+            case "spigot" -> spigot(spec.version(), spec.build());
             default -> throw new EvokerException("unknown server software: " + spec.software());
         };
     }
 
     /**
-     * The jar evoker downloads: the server itself, or for quilt/neoforge the installer that builds it.
+     * The jar evoker downloads: the server itself, or for quilt/neoforge/spigot the installer that builds it.
      * Fabric's launcher and the Quilt installer put vanilla into server.jar themselves.
      */
     static String jarName(String software) {
@@ -43,22 +43,31 @@ final class Server {
             case "fabric" -> "fabric-server-launch.jar";
             case "quilt" -> "quilt-installer.jar";
             case "neoforge" -> "neoforge-installer.jar";
+            case "spigot" -> "BuildTools.jar";
             default -> "server.jar";
         };
     }
 
     static final String STAMP = ".evoker-installed";
     static final String INSTALLER_LOG = ".evoker-installer.log";
+    static final String BUILDTOOLS_DIR = ".evoker-buildtools";
 
     /**
      * For installer-based software, runs the installer unless the stamp file says this exact
      * software/version/build is already installed. Other software needs nothing.
      */
     static void runInstaller(Path dir, Lock.Locked locked, Manifest.Settings settings) {
+        Path cwd = dir;
         List<String> args = switch (locked.software()) {
             case "quilt" -> List.of("install", "server", locked.version(), locked.build(), "--download-server",
                     "--install-dir=.");
             case "neoforge" -> List.of("--installServer", ".");
+            case "spigot" -> {
+                // BuildTools clones and compiles in its own folder, then writes server.jar into the server folder.
+                cwd = dir.resolve(BUILDTOOLS_DIR);
+                yield List.of("--rev", locked.build(), "--compile", "spigot", "--output-dir",
+                        dir.toAbsolutePath().toString(), "--final-name", "server.jar", "--nogui");
+            }
             default -> null;
         };
         if (args == null) return;
@@ -66,10 +75,13 @@ final class Server {
         Path stampFile = dir.resolve(STAMP);
         try {
             if (Files.exists(stampFile) && Files.readString(stampFile).equals(stamp)) return;
-            var command = new ArrayList<>(List.of(settings.java(), "-jar", jarName(locked.software())));
+            Files.createDirectories(cwd);
+            var command = new ArrayList<>(List.of(settings.java(), "-jar",
+                    dir.resolve(jarName(locked.software())).toAbsolutePath().toString()));
             command.addAll(args);
-            Main.log("running the " + locked.software() + " installer (output in " + INSTALLER_LOG + ")");
-            Process p = new ProcessBuilder(command).directory(dir.toFile()).redirectErrorStream(true)
+            Main.log("running the " + locked.software() + " installer (output in " + INSTALLER_LOG + ")"
+                    + (locked.software().equals("spigot") ? "; building spigot takes several minutes" : ""));
+            Process p = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true)
                     .redirectOutput(dir.resolve(INSTALLER_LOG).toFile()).start();
             p.getOutputStream().close(); // installers need no input
             int exit = p.waitFor();
@@ -97,6 +109,7 @@ final class Server {
                 String args = System.getProperty("os.name").startsWith("Windows") ? "win_args.txt" : "unix_args.txt";
                 command.add("@libraries/net/neoforged/neoforge/" + locked.build() + "/" + args);
             }
+            case "spigot" -> command.addAll(List.of("-jar", "server.jar"));
             default -> command.addAll(List.of("-jar", jarName(locked.software())));
         }
         command.add("nogui");
@@ -212,6 +225,19 @@ final class Server {
         // ponytail: no upstream checksum fetched; evoker's own sha256 still pins the installer
         return new Resolved(build, apis.neoforge() + "/releases/net/neoforged/neoforge/" + build + "/neoforge-"
                 + build + "-installer.jar", null, null);
+    }
+
+    /** Spigot: build is the Spigot build number (BuildTools --rev); evoker locks the BuildTools jar that builds it. */
+    private Resolved spigot(String version, String build) {
+        if (build.equals("latest")) {
+            JsonNode info = http.jsonOrNull(apis.spigot() + "/versions/" + version + ".json");
+            if (info == null) throw new EvokerException("spigot has no build for " + version);
+            build = info.path("name").asString();
+        }
+        String jenkins = apis.spigot() + "/jenkins/job/BuildTools/";
+        String tools = http.json(jenkins + "lastSuccessfulBuild/api/json").path("number").asString();
+        // ponytail: no upstream checksum (Jenkins publishes none); evoker's own sha256 pins BuildTools
+        return new Resolved(build, jenkins + tools + "/artifact/target/BuildTools.jar", null, null);
     }
 
     static String neoforgePrefix(String version) {

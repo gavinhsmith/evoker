@@ -21,9 +21,9 @@ Describes the server you want. You write it; evoker only rewrites it when a comm
 
 | Key | Meaning |
 |---|---|
-| `software` | `vanilla`, `paper`, `purpur`, `fabric`, `quilt` or `neoforge`. See [Server Software](Server-Software). |
+| `software` | `vanilla`, `paper`, `purpur`, `spigot`, `fabric`, `quilt` or `neoforge`. See [Server Software](Server-Software). |
 | `version` | Minecraft version, e.g. `1.21.4`. |
-| `build` | `latest` (default) or a pinned build: Paper/Purpur build number, Fabric/Quilt loader version, NeoForge version. Ignored for vanilla. |
+| `build` | `latest` (default) or a pinned build: Paper/Purpur build number, Fabric/Quilt loader version, NeoForge version, Spigot build number. Ignored for vanilla. |
 
 Changing any of these makes the next `install`/`start` download the matching server.
 

@@ -21,14 +21,21 @@ evoker is a Java 21 CLI that manages a Minecraft server's dependencies. `evoker.
 
 `src/main/java/com/gavinhsmith/evoker/`, kept flat on purpose:
 
-- `Main`: CLI entry; a `switch` on the command, no CLI library
-- `Manifest`, `Lock`: `evoker.json` / `evoker.lock` records and JSON IO
+- `Main`: CLI entry; a `switch` on the command, no CLI library. Also the install flow: `plan` (resolve, no side effects; used by `upgrade --dry-run`) then apply (download, delete, write lock)
+- `Manifest`, `Lock`: `evoker.json` / `evoker.lock` records and JSON IO (`Json` holds the one mapper)
 - `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers
-- `Server`: per-software jar/installer resolution and launch command
-- `Resolver`: recursive dependency resolution, conflicts, pruning
-- `Installer`: downloads, hashing, file placement, `server.properties` / `eula.txt`
+- `Server`: per-software resolution, installers (quilt, neoforge, spigot) and launch command
+- `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure
+- `Installer`: file placement, lock-hash checks, `server.properties` / `eula.txt`
+- `Http`: JSON GETs and hashed downloads; `Apis`: every upstream base URL; `EvokerException`: user-facing errors
 
-(Not all of these exist yet; see the README status table.)
+Tests live in `src/test/java/com/gavinhsmith/evoker/`. `FakeApi` serves fixtures over a local HTTP server; `FakeServer` / `FakeInstaller` are built into jars at test time so the real process launching is exercised.
+
+## Behavior rules worth knowing
+
+- Never block `start`: if something can't be resolved but is locked, keep the locked version and warn.
+- `install` / `start` go online only when `evoker.json` asks for something the lock doesn't satisfy.
+- A file whose download no longer matches its locked sha256 is never installed (warning); `update` is how a URL entry accepts a new file.
 
 ## Rules
 

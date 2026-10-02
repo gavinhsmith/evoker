@@ -111,6 +111,7 @@ public final class Main {
             fabric-server-launch.jar
             quilt-server-launch.jar
             *-installer.jar
+            BuildTools.jar
             *-installer.jar.log
             .evoker-*
             run.sh
@@ -440,7 +441,10 @@ public final class Main {
                     + (have.build() == null ? "" : " build " + have.build()));
             return have;
         }
-        if (!stale && resolved.url().equals(have.url()) && Objects.equals(resolved.build(), have.build())) return have;
+        // Same build means nothing to update, even if a newer installer/launcher exists (rebuilding spigot takes minutes).
+        if (!stale && (resolved.build() != null ? resolved.build().equals(have.build()) : resolved.url().equals(have.url()))) {
+            return have;
+        }
         download[0] = resolved;
         return new Lock.Locked(want.software(), want.version(), resolved.build(), resolved.url(), null);
     }

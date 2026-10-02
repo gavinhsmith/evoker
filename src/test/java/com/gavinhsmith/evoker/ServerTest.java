@@ -111,9 +111,15 @@ class ServerTest {
     }
 
     @Test
-    void notYetSupported() {
+    void unknownSoftware() {
+        var e = assertThrows(EvokerException.class, () -> server.resolve(spec("bukkit", "latest")));
+        assertTrue(e.getMessage().contains("unknown server software"), e.getMessage());
+    }
+
+    @Test
+    void spigotUnknownVersion() {
         var e = assertThrows(EvokerException.class, () -> server.resolve(spec("spigot", "latest")));
-        assertTrue(e.getMessage().contains("not supported yet"), e.getMessage());
+        assertTrue(e.getMessage().contains("spigot has no build for 1.21.4"), e.getMessage());
     }
 
     @Test

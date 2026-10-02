@@ -8,6 +8,7 @@
 | `fabric` | Fabric loader version | Fabric meta (server launcher) | none | `fabric-server-launch.jar` |
 | `quilt` | Quilt loader version | Quilt meta + Quilt installer | none | `quilt-installer.jar`, then runs it |
 | `neoforge` | NeoForge version (e.g. `21.4.158`) | NeoForged Maven installer | none | `neoforge-installer.jar`, then runs it |
+| `spigot` | Spigot build number (e.g. `4458`) | SpigotMC BuildTools (Jenkins) | none | `BuildTools.jar`, then builds Spigot locally |
 
 Whatever the upstream publishes, evoker pins the file it downloaded by its own SHA-256 in [evoker.lock](evoker-lock).
 
@@ -18,15 +19,19 @@ Whatever the upstream publishes, evoker pins the file it downloaded by its own S
 - **fabric**: the newest stable loader, with the newest stable installer.
 - **quilt**: the newest non-beta loader available for the game version, or the newest beta if there is none.
 - **neoforge**: the newest non-beta NeoForge for the game version, or the newest beta. NeoForge versions follow the game version: `1.21.4` → `21.4.x`, `1.21` → `21.0.x`, `26.1` → `26.1.0.x`.
+- **spigot**: the current Spigot build for the game version (from `hub.spigotmc.org/versions/<version>.json`).
 
-## Installers (quilt, neoforge)
+A newer installer, launcher or BuildTools on its own never counts as an update: the server is only re-downloaded or rebuilt when its `build` changes.
 
-evoker downloads the installer and runs it in the server folder:
+## Installers (quilt, neoforge, spigot)
+
+evoker downloads the installer and runs it:
 
 - quilt: `java -jar quilt-installer.jar install server <version> <build> --download-server --install-dir=.`
 - neoforge: `java -jar neoforge-installer.jar --installServer .`
+- spigot: `java -jar BuildTools.jar --rev <build> --compile spigot --output-dir <server folder> --final-name server.jar --nogui`, run inside `.evoker-buildtools/` (where BuildTools clones and compiles). Spigot publishes no server downloads, so it is built locally: this needs **git** and takes **several minutes**, but only once per build. Unless you specifically need Spigot, `paper` runs the same plugins and downloads in seconds.
 
-The installer's output goes to `.evoker-installer.log`. evoker records what it installed in `.evoker-installed` and only runs the installer again when the software, version or build changes. A failing installer is an error.
+The installer's output goes to `.evoker-installer.log`. evoker records what it installed in `.evoker-installed` and only runs the installer again when the software, version, build or installer changes. A failing installer is an error.
 
 ## How the server is launched
 
@@ -34,7 +39,7 @@ The installer's output goes to `.evoker-installer.log`. evoker records what it i
 
 | `software` | Launch |
 |---|---|
-| vanilla, paper, purpur | `-jar server.jar` |
+| vanilla, paper, purpur, spigot | `-jar server.jar` |
 | fabric | `-jar fabric-server-launch.jar` |
 | quilt | `-jar quilt-server-launch.jar` |
 | neoforge | `@user_jvm_args.txt @libraries/net/neoforged/neoforge/<build>/win_args.txt` (`unix_args.txt` on Linux/macOS), same as NeoForge's own `run.bat` / `run.sh` |
@@ -44,9 +49,4 @@ The installer's output goes to `.evoker-installer.log`. evoker records what it i
 - **fabric / quilt**: the vanilla server ends up in `server.jar` and libraries in `libraries/`.
 - **paper / purpur** keep the vanilla jar they patch in `cache/` and `libraries/`.
 - **neoforge**: `user_jvm_args.txt` is passed through if it exists; evoker's `jvmArgs` work too.
-
-## Planned
-
-| `software` | How |
-|---|---|
-| `spigot` | Built locally with BuildTools (no official downloads) |
+- **spigot**: `.evoker-buildtools/` keeps BuildTools' clones so later builds are faster; it is safe to delete.
