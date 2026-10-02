@@ -19,6 +19,19 @@ Download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/e
 java -jar evoker.jar <command>
 ```
 
+Describe your server in `evoker.json`:
+
+```json
+{
+  "server": { "software": "paper", "version": "1.21.4" },
+  "eula": true,
+  "properties": { "motd": "My server" },
+  "evoker": { "jvmArgs": ["-Xmx4G"] }
+}
+```
+
+Then `java -jar evoker.jar start` downloads the server, writes `evoker.lock`, and runs it.
+
 Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wiki).
 
 ## Status
@@ -26,7 +39,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | Feature | Status |
 |---|---|
 | Build, CI, releases, wiki | ✅ |
-| `install` / `start` (vanilla, paper, purpur, fabric) | planned |
+| `install` / `start` (vanilla, paper, purpur, fabric) | ✅ |
 | Modrinth content, dependency resolution | planned |
 | `update` / `upgrade` | planned |
 | Hangar + URL sources | planned |
@@ -40,7 +53,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 
 ```sh
 ./mvnw verify                  # build + unit and integration tests (offline)
-./mvnw verify -Dgroups=live    # tests against the real Modrinth/Hangar/server APIs
+./mvnw verify -Plive           # only the tests against the real Modrinth/Hangar/server APIs
 java -jar target/evoker.jar    # run the build
 ```
 

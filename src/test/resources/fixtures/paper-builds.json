@@ -1,0 +1,5 @@
+[
+{"id":233,"channel":"ALPHA","downloads":{"server:default":{"name":"paper-1.21.4-233.jar","checksums":{"sha256":"0"},"url":"{base}/files/paper-233.jar"}}},
+{"id":232,"channel":"STABLE","downloads":{"server:default":{"name":"paper-1.21.4-232.jar","checksums":{"sha256":"{sha256}"},"url":"{base}/files/server.jar"}}},
+{"id":231,"channel":"STABLE","downloads":{"server:default":{"name":"paper-1.21.4-231.jar","checksums":{"sha256":"0"},"url":"{base}/files/paper-231.jar"}}}
+]

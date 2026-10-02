@@ -12,9 +12,19 @@
     <revision>0.0.0-SNAPSHOT</revision>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <!-- Tests tagged "live" hit real APIs; run them with -Dgroups=live -->
+    <!-- Tests tagged "live" hit real APIs; run only them with -Plive -->
     <excludedGroups>live</excludedGroups>
   </properties>
+
+  <profiles>
+    <profile>
+      <id>live</id>
+      <properties>
+        <groups>live</groups>
+        <excludedGroups></excludedGroups>
+      </properties>
+    </profile>
+  </profiles>
 
   <dependencies>
     <dependency>
@@ -63,6 +73,9 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>com.gavinhsmith.evoker.Main</mainClass>
+                  <manifestEntries>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                  </manifestEntries>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>

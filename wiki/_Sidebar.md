@@ -1,1 +1,6 @@
 - [Home](Home)
+- [Getting Started](Getting-Started)
+- [Commands](Commands)
+- [evoker.json](evoker-json)
+- [evoker.lock](evoker-lock)
+- [Server Software](Server-Software)

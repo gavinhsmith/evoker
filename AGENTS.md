@@ -10,7 +10,7 @@ evoker is a Java 21 CLI that manages a Minecraft server's dependencies. `evoker.
 
 ```sh
 ./mvnw verify                  # build, unit + integration tests (offline, uses local fixtures)
-./mvnw verify -Dgroups=live    # also hit the real APIs (Modrinth, Hangar, Mojang, PaperMC, ...)
+./mvnw verify -Plive           # only the live tests: real APIs (Modrinth, Hangar, Mojang, PaperMC, ...)
 ```
 
 - Output: `target/evoker.jar` (shaded, runnable with `java -jar`).
