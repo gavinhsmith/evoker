@@ -44,6 +44,10 @@ record Manifest(ServerSpec server, boolean eula, Map<String, Object> properties,
         return new Manifest(server, eula, properties, content, evoker);
     }
 
+    Manifest withServer(ServerSpec server) {
+        return new Manifest(server, eula, properties, content, evoker);
+    }
+
     void write(Path dir) {
         Json.write(dir.resolve(FILE), this);
     }

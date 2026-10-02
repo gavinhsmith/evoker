@@ -18,7 +18,11 @@ interface Source {
      * published is sortable (ISO-8601) and only used to pick the newer of two conflicting versions.
      */
     record Resolution(String slug, Lock.Entry entry, String published, List<Dependency> dependencies, String algo,
-                      String hash) {}
+                      String hash) {
+        Resolution withEntry(Lock.Entry entry) {
+            return new Resolution(slug, entry, published, dependencies, algo, hash);
+        }
+    }
 
     /** A dependency on another project of the same source. versionId is null when any version will do. */
     record Dependency(String projectId, String versionId, boolean incompatible) {}

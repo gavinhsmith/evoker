@@ -100,25 +100,20 @@ final class Resolver {
         var result = new TreeMap<String, Source.Resolution>();
         resolved.forEach((key, r) -> {
             Set<String> by = requiredBy.get(key);
-            Lock.Entry e = r.entry();
-            var entry = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), e.sha256(),
-                    e.sha1(), by == null ? null : List.copyOf(by));
-            result.put(key, new Source.Resolution(r.slug(), entry, r.published(), r.dependencies(), r.algo(), r.hash()));
+            result.put(key, r.withEntry(r.entry().withRequiredBy(by == null ? null : List.copyOf(by))));
         });
         return result;
     }
 
     /** A locked entry as a resolution, depending on whatever the lock says it required. */
     private static Source.Resolution keep(String key, Map<String, Lock.Entry> locked) {
-        Lock.Entry e = locked.get(key);
         var deps = new ArrayList<Source.Dependency>();
         locked.values().forEach(d -> {
             if (d.requiredBy() != null && d.requiredBy().contains(key)) {
                 deps.add(new Source.Dependency(d.projectId(), d.versionId(), false));
             }
         });
-        var entry = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), e.sha256(), e.sha1(), null);
-        return new Source.Resolution(ref(key), entry, "", deps, null, null);
+        return new Source.Resolution(ref(key), locked.get(key).withRequiredBy(null), "", deps, null, null);
     }
 
     /** Keeps the evoker.json entries and whatever they (transitively) require; drops the rest, cycles included. */
@@ -139,12 +134,8 @@ final class Resolver {
             }
         }
         // drop requiredBy links to removed entries
-        kept.replaceAll((key, e) -> {
-            if (e.requiredBy() == null) return e;
-            List<String> by = e.requiredBy().stream().filter(kept::containsKey).toList();
-            return new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), e.sha256(), e.sha1(),
-                    by.isEmpty() ? null : by);
-        });
+        kept.replaceAll((key, e) -> e.requiredBy() == null ? e
+                : e.withRequiredBy(e.requiredBy().stream().filter(kept::containsKey).toList()));
         return kept;
     }
 

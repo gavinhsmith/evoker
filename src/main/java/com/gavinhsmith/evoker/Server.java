@@ -183,9 +183,9 @@ final class Server {
         if (loader.equals("latest")) {
             JsonNode loaders = http.json(base + "/loader/" + version);
             if (loaders.isEmpty()) throw new EvokerException("fabric has no loader for " + version);
-            loader = stableOrFirst(loaders, "loader").path("version").asString();
+            loader = stableOrFirst(loaders.valueStream().map(l -> l.path("loader")).toList()).path("version").asString();
         }
-        String installer = stableOrFirst(http.json(base + "/installer"), null).path("version").asString();
+        String installer = stableOrFirst(http.json(base + "/installer").valueStream().toList()).path("version").asString();
         // Fabric publishes no checksum for the launcher jar; evoker's own sha256 still pins it.
         return new Resolved(loader, base + "/loader/" + version + "/" + loader + "/" + installer + "/server/jar",
                 null, null);
@@ -259,11 +259,7 @@ final class Server {
         return v;
     }
 
-    private static JsonNode stableOrFirst(JsonNode list, String field) {
-        for (JsonNode item : list) {
-            JsonNode node = field == null ? item : item.path(field);
-            if (node.path("stable").asBoolean()) return node;
-        }
-        return field == null ? list.get(0) : list.get(0).path(field);
+    private static JsonNode stableOrFirst(List<JsonNode> list) {
+        return list.stream().filter(n -> n.path("stable").asBoolean()).findFirst().orElse(list.get(0));
     }
 }

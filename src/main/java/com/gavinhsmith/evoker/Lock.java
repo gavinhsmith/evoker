@@ -35,10 +35,6 @@ record Lock(int lockVersion, Locked server, Map<String, Entry> content) {
         Json.write(dir.resolve(FILE), this);
     }
 
-    Lock withServer(Locked server) {
-        return new Lock(VERSION, server, content);
-    }
-
     /** The installed server jar (or installer). sha256 is computed by evoker. */
     record Locked(String software, String version, String build, String url, String sha256) {
         Locked withSha256(String sha256) {
@@ -46,15 +42,21 @@ record Lock(int lockVersion, Locked server, Map<String, Entry> content) {
         }
     }
 
-    Lock withContent(Map<String, Entry> content) {
-        return new Lock(VERSION, server, content);
-    }
-
     /** An installed content entry. type is mod, plugin, datapack or resourcepack. */
     record Entry(String type, String projectId, String versionId, String version, String url, String sha256,
                  String sha1, List<String> requiredBy) {
         Entry withSha256(String sha256) {
+            return withHashes(sha256, sha1);
+        }
+
+        Entry withHashes(String sha256, String sha1) {
             return new Entry(type, projectId, versionId, version, url, sha256, sha1, requiredBy);
+        }
+
+        /** An empty list is stored as null, so the lock omits it. */
+        Entry withRequiredBy(List<String> requiredBy) {
+            return new Entry(type, projectId, versionId, version, url, sha256, sha1,
+                    requiredBy == null || requiredBy.isEmpty() ? null : List.copyOf(requiredBy));
         }
     }
 }

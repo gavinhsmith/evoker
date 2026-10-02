@@ -247,7 +247,7 @@ public final class Main {
         merged.putAll(content);
         Manifest updated = existing == null
                 ? new Manifest(pack.server(), false, null, merged, null)
-                : new Manifest(pack.server(), existing.eula(), existing.properties(), merged, existing.evoker());
+                : existing.withServer(pack.server()).withContent(merged);
 
         install(updated, false, content::containsKey);
         int[] overrides = Mrpack.extractOverrides(zip, dir); // only once the install worked
@@ -355,10 +355,10 @@ public final class Main {
         Manifest manifest = Manifest.read(dir);
         Lock before = Lock.read(dir);
         var unpinned = new LinkedHashMap<String, Manifest.Content>();
-        manifest.content().forEach((key, c) -> unpinned.put(key, c.url() != null ? c : new Manifest.Content("latest", null, null)));
+        manifest.content().forEach((key, c) -> unpinned.put(key, c.url() != null ? c : Resolver.LATEST));
         var spec = manifest.server();
-        Manifest latest = new Manifest(new Manifest.ServerSpec(spec.software(), spec.version(), "latest"),
-                manifest.eula(), manifest.properties(), unpinned, manifest.evoker());
+        Manifest latest = manifest.withServer(new Manifest.ServerSpec(spec.software(), spec.version(), "latest"))
+                .withContent(unpinned);
 
         Lock after = dryRun ? plan(latest, before, true, key -> true).lock() : install(latest, true, key -> true);
         printChanges(before, after);
@@ -374,8 +374,8 @@ public final class Main {
             content.put(key, pinned && e != null ? new Manifest.Content(e.version(), null, null) : c);
         });
         String build = spec.build().equals("latest") || after.server() == null ? spec.build() : after.server().build();
-        Manifest upgraded = new Manifest(new Manifest.ServerSpec(spec.software(), spec.version(), build),
-                manifest.eula(), manifest.properties(), content, manifest.evoker());
+        Manifest upgraded = manifest.withServer(new Manifest.ServerSpec(spec.software(), spec.version(), build))
+                .withContent(content);
         if (!upgraded.equals(manifest)) upgraded.write(dir);
     }
 
@@ -437,12 +437,10 @@ public final class Main {
             Lock.Entry e = r.entry(), old = before.content().get(key);
             if (!e.type().equals("resourcepack") || e.sha1() != null) return r;
             if (old != null && e.url().equals(old.url()) && old.sha1() != null && !refresh.test(key)) {
-                e = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), old.sha256(), old.sha1(), e.requiredBy());
-            } else {
-                Http.Fetched f = installer.hash(key, e.url());
-                e = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), f.sha256(), f.sha1(), e.requiredBy());
+                return r.withEntry(e.withHashes(old.sha256(), old.sha1()));
             }
-            return new Source.Resolution(r.slug(), e, r.published(), r.dependencies(), r.algo(), r.hash());
+            Http.Fetched f = installer.hash(key, e.url());
+            return r.withEntry(e.withHashes(f.sha256(), f.sha1()));
         });
 
         var properties = new LinkedHashMap<>(resourcePack(content, manifest.properties()));
@@ -484,10 +482,12 @@ public final class Main {
     }
 
     private Plan plan(Manifest manifest, Lock before, boolean updateServer, Predicate<String> refresh) {
-        Server.Resolved[] download = {null};
-        Lock.Locked server = planServer(manifest.server(), before.server(), updateServer, download);
-        return new Plan(server, download[0], planContent(manifest, before.content(), refresh));
+        ServerPlan server = planServer(manifest.server(), before.server(), updateServer);
+        return new Plan(server.locked(), server.download(), planContent(manifest, before.content(), refresh));
     }
+
+    /** The server to lock, and the download (with its upstream checksum) when a new jar must be fetched. */
+    private record ServerPlan(Lock.Locked locked, Server.Resolved download) {}
 
     private Map<String, Source.Resolution> planContent(Manifest manifest, Map<String, Lock.Entry> locked,
                                                        Predicate<String> refresh) {
@@ -502,14 +502,13 @@ public final class Main {
         return kept;
     }
 
-    /** The server to lock. Sets download[0] when a new jar must be fetched (with its upstream checksum). */
-    private Lock.Locked planServer(Manifest.ServerSpec want, Lock.Locked have, boolean update,
-                                   Server.Resolved[] download) {
+    private ServerPlan planServer(Manifest.ServerSpec want, Lock.Locked have, boolean update) {
+        var keep = new ServerPlan(have, null);
         boolean stale = have == null
                 || !want.software().equals(have.software())
                 || !want.version().equals(have.version())
                 || (!want.build().equals("latest") && !want.build().equals(have.build()));
-        if (!stale && !(update && want.build().equals("latest"))) return have;
+        if (!stale && !(update && want.build().equals("latest"))) return keep;
         Server.Resolved resolved;
         try {
             resolved = server.resolve(want);
@@ -518,14 +517,14 @@ public final class Main {
             if (have == null || !have.software().equals(want.software())) throw e;
             warn(e.getMessage() + "; keeping " + have.software() + " " + have.version()
                     + (have.build() == null ? "" : " build " + have.build()));
-            return have;
+            return keep;
         }
         // Same build means nothing to update, even if a newer installer/launcher exists (rebuilding spigot takes minutes).
         if (!stale && (resolved.build() != null ? resolved.build().equals(have.build()) : resolved.url().equals(have.url()))) {
-            return have;
+            return keep;
         }
-        download[0] = resolved;
-        return new Lock.Locked(want.software(), want.version(), resolved.build(), resolved.url(), null);
+        return new ServerPlan(new Lock.Locked(want.software(), want.version(), resolved.build(), resolved.url(), null),
+                resolved);
     }
 
     /** server.properties keys for the (single) resource pack, unless evoker.json sets them itself. */

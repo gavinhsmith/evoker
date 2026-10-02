@@ -1,7 +1,5 @@
 package com.gavinhsmith.evoker;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -23,7 +21,7 @@ final class Modrinth implements Source {
 
     @Override
     public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.ServerSpec server) {
-        JsonNode project = http.jsonOrNull(api + "/project/" + enc(ref));
+        JsonNode project = http.jsonOrNull(api + "/project/" + Http.enc(ref));
         if (project == null) throw new EvokerException("no Modrinth project \"" + ref + "\"");
         String slug = project.path("slug").asString();
         // Only when choosing a version, so re-resolving an already locked entry doesn't repeat the warning.
@@ -31,7 +29,7 @@ final class Modrinth implements Source {
             Main.warn("modrinth:" + slug + " is client-side only; it does nothing on a server");
         }
         JsonNode chosen = exactVersionId != null
-                ? http.json(api + "/version/" + enc(exactVersionId))
+                ? http.json(api + "/version/" + Http.enc(exactVersionId))
                 : choose(slug, project.path("id").asString(), wanted.version(), server);
 
         String type = type(chosen, server.software());
@@ -52,7 +50,7 @@ final class Modrinth implements Source {
             String versionId = d.path("version_id").asString(null);
             if (!kind.equals("required") && !kind.equals("incompatible")) continue; // optional, embedded
             if (projectId == null && versionId != null) {
-                projectId = http.json(api + "/version/" + enc(versionId)).path("project_id").asString();
+                projectId = http.json(api + "/version/" + Http.enc(versionId)).path("project_id").asString();
             }
             if (projectId == null) {
                 if (kind.equals("required")) {
@@ -85,7 +83,7 @@ final class Modrinth implements Source {
         var slugs = new HashMap<String, String>();
         if (projectIds.isEmpty()) return slugs;
         String ids = projectIds.stream().sorted().map(id -> "\"" + id + "\"").collect(Collectors.joining(",", "[", "]"));
-        for (JsonNode p : http.json(api + "/projects?ids=" + enc(ids))) {
+        for (JsonNode p : http.json(api + "/projects?ids=" + Http.enc(ids))) {
             slugs.put(p.path("id").asString(), p.path("slug").asString());
         }
         return slugs;
@@ -93,7 +91,7 @@ final class Modrinth implements Source {
 
     /** The .mrpack of a modpack project's newest release (or newest version). */
     String packUrl(String slug) {
-        JsonNode versions = http.jsonOrNull(api + "/project/" + enc(slug) + "/version");
+        JsonNode versions = http.jsonOrNull(api + "/project/" + Http.enc(slug) + "/version");
         if (versions == null || versions.isEmpty()) throw new EvokerException("no Modrinth modpack \"" + slug + "\"");
         JsonNode chosen = versions.get(0);
         for (JsonNode v : versions) {
@@ -112,7 +110,7 @@ final class Modrinth implements Source {
     private JsonNode choose(String slug, String projectId, String version, Manifest.ServerSpec server) {
         String versions = api + "/project/" + projectId + "/version";
         List<JsonNode> compatible = byPreference(
-                http.json(versions + "?game_versions=" + enc("[\"" + server.version() + "\"]")), server.software());
+                http.json(versions + "?game_versions=" + Http.enc("[\"" + server.version() + "\"]")), server.software());
         if (version.equals("latest")) {
             if (compatible.isEmpty()) {
                 throw new EvokerException("modrinth:" + slug + " has no version for " + server.software() + " "
@@ -181,9 +179,5 @@ final class Modrinth implements Source {
 
     private static boolean modded(String software) {
         return List.of("fabric", "quilt", "neoforge").contains(software);
-    }
-
-    private static String enc(String s) {
-        return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 }

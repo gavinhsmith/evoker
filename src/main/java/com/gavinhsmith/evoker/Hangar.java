@@ -1,7 +1,5 @@
 package com.gavinhsmith.evoker;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import tools.jackson.databind.JsonNode;
@@ -21,30 +19,27 @@ final class Hangar implements Source {
         if (!List.of("paper", "purpur").contains(server.software())) {
             throw new EvokerException("hangar:" + ref + ": Hangar plugins need paper or purpur, not " + server.software());
         }
-        JsonNode project = http.jsonOrNull(api + "/projects/" + enc(ref));
+        JsonNode project = http.jsonOrNull(api + "/projects/" + Http.enc(ref));
         if (project == null) throw new EvokerException("no Hangar project \"" + ref + "\"");
         String slug = project.path("namespace").path("slug").asString();
         String key = "hangar:" + slug;
 
         JsonNode chosen;
         if (exactVersionId != null) {
-            chosen = http.json(api + "/versions/" + enc(exactVersionId));
+            chosen = http.json(api + "/versions/" + Http.enc(exactVersionId));
         } else if (wanted.version().equals("latest")) {
             // Newest release; only if there is none, the newest of any channel (snapshots, betas).
-            String query = api + "/projects/" + enc(slug) + "/versions?limit=1&platform=PAPER&platformVersion="
-                    + enc(server.version());
+            String query = api + "/projects/" + Http.enc(slug) + "/versions?limit=1&platform=PAPER&platformVersion="
+                    + Http.enc(server.version());
             JsonNode versions = http.json(query + "&channel=Release").path("result");
             if (versions.isEmpty()) versions = http.json(query).path("result");
             if (versions.isEmpty()) throw new EvokerException(key + " has no version for paper " + server.version());
             chosen = versions.get(0);
         } else {
-            chosen = http.jsonOrNull(api + "/projects/" + enc(slug) + "/versions/" + enc(wanted.version()));
+            chosen = http.jsonOrNull(api + "/projects/" + Http.enc(slug) + "/versions/" + Http.enc(wanted.version()));
             if (chosen == null) throw new EvokerException(key + " has no version " + wanted.version());
-            boolean compatible = false;
-            for (JsonNode v : chosen.path("platformDependencies").path("PAPER")) {
-                compatible |= v.asString().equals(server.version());
-            }
-            if (!compatible) Main.warn(key + " " + wanted.version() + " is not marked compatible with paper " + server.version());
+            if (chosen.path("platformDependencies").path("PAPER").valueStream()
+                    .noneMatch(v -> v.asString().equals(server.version()))) Main.warn(key + " " + wanted.version() + " is not marked compatible with paper " + server.version());
         }
 
         JsonNode download = chosen.path("downloads").path("PAPER");
@@ -68,9 +63,5 @@ final class Hangar implements Source {
                 chosen.path("name").asString(), url, null, null, null);
         return new Resolution(slug, entry, chosen.path("createdAt").asString(), dependencies,
                 sha256 == null ? null : "SHA-256", sha256);
-    }
-
-    private static String enc(String s) {
-        return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 }
