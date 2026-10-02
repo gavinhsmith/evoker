@@ -13,16 +13,24 @@ You describe the server in `evoker.json`, evoker records exactly what it install
 
 ## Install
 
-Download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/evoker/releases/latest) and run it with Java 21+:
+evoker needs Java 21+. One command installs the latest release and an `evoker` launcher:
 
 ```sh
-java -jar evoker.jar <command>
+# Linux / macOS (installs to ~/.evoker; or pipe to `bash -s -- <dir>`)
+curl -fsSL https://raw.githubusercontent.com/gavinhsmith/evoker/main/install.sh | bash
 ```
+
+```powershell
+# Windows (installs to %LOCALAPPDATA%\evoker and adds it to your PATH)
+irm https://raw.githubusercontent.com/gavinhsmith/evoker/main/install.ps1 | iex
+```
+
+Set `EVOKER_VERSION=v0.1.0` for a specific release, or `EVOKER_DIR` for another folder. Or download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/evoker/releases/latest) yourself and run `java -jar evoker.jar <command>`.
 
 ## Quick start
 
 ```sh
-java -jar evoker.jar init paper 1.21.4 --git  # evoker.json, git repo and .gitignore
+evoker init paper 1.21.4 --git  # evoker.json, git repo and .gitignore
 ```
 
 Set `"eula": true` in `evoker.json` (accepting the [Minecraft EULA](https://aka.ms/MinecraftEULA)), add `properties` or `jvmArgs` if you like:
@@ -39,10 +47,10 @@ Set `"eula": true` in `evoker.json` (accepting the [Minecraft EULA](https://aka.
 Then:
 
 ```sh
-java -jar evoker.jar add luckperms            # Modrinth content, dependencies included
-java -jar evoker.jar add hangar:ViaVersion    # Hangar plugins
-java -jar evoker.jar import cobblemon-fabric  # or start from a Modrinth modpack
-java -jar evoker.jar start                    # download what's missing, write evoker.lock, run the server
+evoker add luckperms            # Modrinth content, dependencies included
+evoker add hangar:ViaVersion    # Hangar plugins
+evoker import cobblemon-fabric  # or start from a Modrinth modpack
+evoker start                    # download what's missing, write evoker.lock, run the server
 ```
 
 Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wiki).

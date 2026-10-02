@@ -1,6 +1,6 @@
 # Commands
 
-Run every command inside the server folder: `java -jar evoker.jar <command>`.
+Run every command inside the server folder: `evoker <command>` (or `java -jar evoker.jar <command>` without the launcher).
 
 | Command | What it does |
 |---|---|

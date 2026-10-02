@@ -8,8 +8,22 @@ evoker manages a Minecraft server's dependencies: the server jar, mods, plugins,
 
 ## Quick start
 
+Install (Java 21+ required):
+
 ```sh
-java -jar evoker.jar <command>
+curl -fsSL https://raw.githubusercontent.com/gavinhsmith/evoker/main/install.sh | bash   # Linux / macOS
 ```
 
-evoker requires Java 21 or newer. Download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/evoker/releases/latest).
+```powershell
+irm https://raw.githubusercontent.com/gavinhsmith/evoker/main/install.ps1 | iex           # Windows
+```
+
+Then, in an empty folder:
+
+```sh
+evoker init paper 1.21.4 --git
+evoker add luckperms
+evoker start
+```
+
+See [Getting Started](Getting-Started) for the details.

@@ -2,14 +2,36 @@
 
 ## 1. Install
 
-evoker needs **Java 21 or newer**. Download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/evoker/releases/latest) and put it somewhere handy. Every command below is `java -jar evoker.jar <command>`, run inside your server folder.
+evoker needs **Java 21 or newer** ([Adoptium](https://adoptium.net) is a good source).
+
+**Linux / macOS:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/gavinhsmith/evoker/main/install.sh | bash
+```
+
+This puts `evoker.jar` and an `evoker` launcher in `~/.evoker` and tells you how to add it to your `PATH`. For another folder: `… | bash -s -- /opt/evoker` (or set `EVOKER_DIR`).
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/gavinhsmith/evoker/main/install.ps1 | iex
+```
+
+This installs to `%LOCALAPPDATA%\evoker` (or `$env:EVOKER_DIR`) and adds it to your user `PATH`; open a new terminal afterwards. Set `$env:EVOKER_NO_MODIFY_PATH = 1` to leave `PATH` alone.
+
+Both scripts install the latest release; set `EVOKER_VERSION` (e.g. `v0.1.0`) for a specific one. Re-run them to update evoker. The launcher uses `JAVA_HOME` if it is set, otherwise `java` from your `PATH`.
+
+**By hand:** download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/evoker/releases/latest) and use `java -jar evoker.jar <command>` wherever these pages say `evoker <command>`.
+
+Run every command inside your server folder.
 
 ## 2. Create the server
 
 In an empty folder:
 
 ```sh
-java -jar evoker.jar init paper 1.21.4 --git
+evoker init paper 1.21.4 --git
 ```
 
 This writes `evoker.json` (software and version default to `paper` and the newest Minecraft release). `--git` also runs `git init` and writes a `.gitignore` for a Minecraft server (see [below](#git)).
@@ -33,8 +55,8 @@ See [evoker.json](evoker-json) for every option.
 ## 3. Add content
 
 ```sh
-java -jar evoker.jar add luckperms
-java -jar evoker.jar add hangar:ViaVersion
+evoker add luckperms
+evoker add hangar:ViaVersion
 ```
 
 Dependencies come along automatically. See [Content Sources](Content-Sources).
@@ -42,7 +64,7 @@ Dependencies come along automatically. See [Content Sources](Content-Sources).
 ## 4. Start it
 
 ```sh
-java -jar evoker.jar start
+evoker start
 ```
 
 evoker downloads the server jar, writes [evoker.lock](evoker-lock), applies your `properties` to `server.properties`, and runs the server. The server console works as usual; type `stop` to shut it down. evoker exits with the server's exit code.

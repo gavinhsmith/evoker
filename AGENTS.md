@@ -27,6 +27,7 @@ evoker is a Java 21 CLI that manages a Minecraft server's dependencies. `evoker.
 - `Server`: per-software resolution, installers (quilt, neoforge, spigot) and launch command
 - `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure
 - `Installer`: file placement, lock-hash checks, `server.properties` / `eula.txt`
+- `install.sh` / `install.ps1` (repo root): one-command installers; CI runs both against the built jar
 - `Http`: JSON GETs and hashed downloads; `Apis`: every upstream base URL; `EvokerException`: user-facing errors
 
 Tests live in `src/test/java/com/gavinhsmith/evoker/`. `FakeApi` serves fixtures over a local HTTP server; `FakeServer` / `FakeInstaller` are built into jars at test time so the real process launching is exercised.

@@ -20,3 +20,18 @@ jobs:
           cache: maven
       - run: ./mvnw -B verify
         shell: bash
+      - name: install.sh installs a working launcher
+        if: runner.os != 'Windows'
+        run: |
+          EVOKER_URL="file://$PWD/target/evoker.jar" bash install.sh "$RUNNER_TEMP/evoker"
+          "$RUNNER_TEMP/evoker/evoker" version
+      - name: install.ps1 installs a working launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:EVOKER_DIR = "$env:RUNNER_TEMP\evoker"
+          $env:EVOKER_URL = "$PWD\target\evoker.jar"
+          $env:EVOKER_NO_MODIFY_PATH = '1'
+          Get-Content -Raw .\install.ps1 | Invoke-Expression
+          & "$env:RUNNER_TEMP\evoker\evoker.cmd" version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
