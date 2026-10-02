@@ -11,9 +11,11 @@ import java.nio.file.Path;
  */
 public class FakeInstaller {
     static final String ARGS = "installer-args.txt";
+    static final String OUTPUT = "fake installer: installing";
 
     public static void main(String[] args) throws IOException {
         Files.writeString(Path.of(ARGS), String.join(" ", args));
+        System.out.println(OUTPUT);
         if (args[0].equals("install")) {
             Files.write(Path.of("quilt-server-launch.jar"), FakeServer.jar());
         } else if (args[0].equals("--rev")) {

@@ -109,7 +109,7 @@ class MainTest {
     void addInstallsContentAndItsDependencies() throws IOException {
         fabricProject();
 
-        Stderr.capture(() -> assertEquals(0, run("add", "alpha")));
+        Output.err(() -> assertEquals(0, run("add", "alpha")));
 
         assertEquals("alpha-2", Files.readString(dir.resolve("mods/modrinth-AAAA.jar")));
         assertEquals("beta-1", Files.readString(dir.resolve("mods/modrinth-BBBB.jar")));
@@ -127,7 +127,7 @@ class MainTest {
     @Test
     void removeDeletesTheEntryAndItsOrphanedDependencies() throws IOException {
         fabricProject();
-        Stderr.capture(() -> run("add", "alpha"));
+        Output.err(() -> run("add", "alpha"));
 
         assertEquals(0, run("remove", "alpha"));
 
@@ -140,9 +140,9 @@ class MainTest {
     @Test
     void removingADependencyExplainsWhoNeedsIt() throws IOException {
         fabricProject();
-        Stderr.capture(() -> run("add", "alpha"));
+        Output.err(() -> run("add", "alpha"));
 
-        String err = Stderr.capture(() -> assertEquals(1, run("remove", "beta")));
+        String err = Output.err(() -> assertEquals(1, run("remove", "beta")));
 
         assertTrue(err.contains("required by [modrinth:alpha]"), err);
     }
@@ -152,7 +152,7 @@ class MainTest {
         fabricProject();
         String before = Files.readString(dir.resolve(Manifest.FILE));
 
-        Stderr.capture(() -> assertEquals(1, run("add", "nope")));
+        Output.err(() -> assertEquals(1, run("add", "nope")));
 
         assertEquals(before, Files.readString(dir.resolve(Manifest.FILE)));
     }
@@ -178,7 +178,7 @@ class MainTest {
                 }
                 """);
 
-        Stderr.capture(() -> assertEquals(0, run("install")));
+        Output.err(() -> assertEquals(0, run("install")));
 
         assertEquals("alpha-datapack", Files.readString(dir.resolve("survival/datapacks/modrinth-AAAA.zip")));
         String props = Files.readString(dir.resolve("server.properties"));

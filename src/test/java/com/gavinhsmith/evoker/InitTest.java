@@ -49,14 +49,14 @@ class InitTest {
     @Test
     void refusesToOverwrite() throws IOException {
         Files.writeString(dir.resolve(Manifest.FILE), "{}");
-        String err = Stderr.capture(() -> assertEquals(1, run("init", "paper", "1.21.4")));
+        String err = Output.err(() -> assertEquals(1, run("init", "paper", "1.21.4")));
         assertTrue(err.contains("already exists"), err);
         assertEquals("{}", Files.readString(dir.resolve(Manifest.FILE)));
     }
 
     @Test
     void rejectsUnknownSoftware() {
-        String err = Stderr.capture(() -> assertEquals(1, run("init", "bukkit", "1.21.4")));
+        String err = Output.err(() -> assertEquals(1, run("init", "bukkit", "1.21.4")));
         assertTrue(err.contains("unknown server software"), err);
     }
 
@@ -64,7 +64,7 @@ class InitTest {
     void gitSetsUpARepositoryAndIgnoresManagedFiles() throws IOException {
         assumeTrue(gitAvailable(), "git is not installed");
 
-        String err = Stderr.capture(() -> assertEquals(0, run("init", "paper", "1.21.4", "--git")));
+        String err = Output.err(() -> assertEquals(0, run("init", "paper", "1.21.4", "--git")));
 
         assertTrue(Files.isDirectory(dir.resolve(".git")));
         String ignore = Files.readString(dir.resolve(".gitignore"));
@@ -78,7 +78,7 @@ class InitTest {
         assumeTrue(gitAvailable(), "git is not installed");
         Files.writeString(dir.resolve(".gitignore"), "mine\n");
 
-        Stderr.capture(() -> assertEquals(0, run("init", "paper", "1.21.4", "--git")));
+        Output.err(() -> assertEquals(0, run("init", "paper", "1.21.4", "--git")));
 
         assertEquals("mine\n", Files.readString(dir.resolve(".gitignore")));
     }

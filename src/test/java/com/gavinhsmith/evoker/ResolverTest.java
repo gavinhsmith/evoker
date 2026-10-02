@@ -117,7 +117,7 @@ class ResolverTest {
         source.version("a", "1", exact("c", "1")).version("b", "1", exact("c", "2"))
                 .version("c", "1").version("c", "2");
 
-        String err = Stderr.capture(() -> assertEquals("2", resolve(manifest("a", "latest", "b", "latest"))
+        String err = Output.err(() -> assertEquals("2", resolve(manifest("a", "latest", "b", "latest"))
                 .get("modrinth:c").version()));
 
         assertTrue(err.contains("using the newer 2"), err);
@@ -127,7 +127,7 @@ class ResolverTest {
     void warnsAboutIncompatibleProjects() {
         source.version("a", "1", new Source.Dependency("b", null, true)).version("b", "1");
 
-        String err = Stderr.capture(() -> resolve(manifest("a", "latest", "b", "latest")));
+        String err = Output.err(() -> resolve(manifest("a", "latest", "b", "latest")));
 
         assertTrue(err.contains("modrinth:a is marked incompatible with modrinth:b"), err);
     }
@@ -153,7 +153,7 @@ class ResolverTest {
         Map<String, Lock.Entry> locked = resolve(manifest("a", "latest"));
         source.projects.get("a").clear(); // a vanished upstream: resolving it now throws
 
-        String err = Stderr.capture(() -> {
+        String err = Output.err(() -> {
             var entries = resolve(manifest("a", "latest"), locked, k -> true);
             assertEquals("1", entries.get("modrinth:a").version());
             assertEquals(List.of("modrinth:a"), entries.get("modrinth:b").requiredBy());

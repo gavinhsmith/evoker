@@ -50,7 +50,7 @@ class SourcesTest {
                         "hangar-versions-backwards.json")
                 .bytes("/files/backwards.jar", "backwards".getBytes());
 
-        Stderr.capture(() -> assertEquals(0, run("add", "hangar:ViaVersion")));
+        Output.err(() -> assertEquals(0, run("add", "hangar:ViaVersion")));
 
         assertEquals("via", Files.readString(dir.resolve("plugins/hangar-31.jar")));
         assertEquals("backwards", Files.readString(dir.resolve("plugins/hangar-12.jar")));
@@ -71,7 +71,7 @@ class SourcesTest {
         // Upstream changes: install refuses the new file and keeps the old one...
         api.bytes("/dl/Geyser-Spigot.jar", "v2".getBytes());
         Files.delete(file);
-        String err = Stderr.capture(() -> assertEquals(0, run("install")));
+        String err = Output.err(() -> assertEquals(0, run("install")));
         assertTrue(err.contains("does not match evoker.lock"), err);
         assertTrue(Files.notExists(file), "a changed upstream file is not installed");
 
@@ -98,7 +98,7 @@ class SourcesTest {
 
     @Test
     void urlNeedsAType() {
-        String err = Stderr.capture(() -> assertEquals(1, run("add", api.base + "/dl/x.jar")));
+        String err = Output.err(() -> assertEquals(1, run("add", api.base + "/dl/x.jar")));
         assertTrue(err.contains("needs --type"), err);
     }
 

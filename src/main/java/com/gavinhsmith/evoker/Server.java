@@ -1,6 +1,8 @@
 package com.gavinhsmith.evoker;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -79,11 +81,19 @@ final class Server {
             var command = new ArrayList<>(List.of(settings.java(), "-jar",
                     dir.resolve(jarName(locked.software())).toAbsolutePath().toString()));
             command.addAll(args);
-            Main.log("running the " + locked.software() + " installer (output in " + INSTALLER_LOG + ")"
+            Main.log("running the " + locked.software() + " installer (output also saved to " + INSTALLER_LOG + ")"
                     + (locked.software().equals("spigot") ? "; building spigot takes several minutes" : ""));
-            Process p = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true)
-                    .redirectOutput(dir.resolve(INSTALLER_LOG).toFile()).start();
+            Process p = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true).start();
             p.getOutputStream().close(); // installers need no input
+            // Show the output live and keep a copy for after it scrolls away.
+            try (InputStream in = p.getInputStream(); OutputStream log = Files.newOutputStream(dir.resolve(INSTALLER_LOG))) {
+                byte[] buf = new byte[8192];
+                for (int n; (n = in.read(buf)) > 0; ) {
+                    System.out.write(buf, 0, n);
+                    System.out.flush();
+                    log.write(buf, 0, n);
+                }
+            }
             int exit = p.waitFor();
             if (exit != 0) {
                 throw new EvokerException(locked.software() + " installer failed (exit " + exit + "); see " + INSTALLER_LOG);

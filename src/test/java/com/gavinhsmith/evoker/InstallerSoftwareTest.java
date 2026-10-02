@@ -70,8 +70,10 @@ class InstallerSoftwareTest {
                 .bytes("/neoforge/releases/net/neoforged/neoforge/21.4.158/neoforge-21.4.158-installer.jar", installer);
         manifest("neoforge");
 
-        assertEquals(FakeServer.EXIT_CODE, run("start"));
+        String out = Output.out(() -> assertEquals(FakeServer.EXIT_CODE, run("start")));
 
+        assertTrue(out.contains(FakeInstaller.OUTPUT), "installer output is shown: " + out);
+        assertTrue(Files.readString(dir.resolve(Server.INSTALLER_LOG)).contains(FakeInstaller.OUTPUT), "and logged");
         assertEquals("--installServer .", Files.readString(dir.resolve(FakeInstaller.ARGS)));
         assertEquals("nogui", Files.readString(dir.resolve(FakeServer.MARKER)));
         assertEquals("21.4.158", Lock.read(dir).server().build());
@@ -106,7 +108,7 @@ class InstallerSoftwareTest {
                 .bytes("/neoforge/releases/net/neoforged/neoforge/21.4.158/neoforge-21.4.158-installer.jar", broken);
         manifest("neoforge");
 
-        String err = Stderr.capture(() -> assertEquals(1, run("install")));
+        String err = Output.err(() -> assertEquals(1, run("install")));
 
         assertTrue(err.contains("neoforge installer failed"), err);
         assertTrue(Files.notExists(dir.resolve(Server.STAMP)));

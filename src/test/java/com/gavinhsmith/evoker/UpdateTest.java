@@ -125,7 +125,7 @@ class UpdateTest {
         api.bytes("/fabric/v2/versions/loader/1.21.5", "[]".getBytes())
                 .bytes(FakeApi.modrinthVersions("BBBB", "1.21.5"), "[]".getBytes());
 
-        String err = Stderr.capture(() -> assertEquals(0, run("upgrade")));
+        String err = Output.err(() -> assertEquals(0, run("upgrade")));
 
         assertTrue(err.contains("fabric has no loader for 1.21.5; keeping fabric 1.21.4"), err);
         assertTrue(err.contains("modrinth:beta has no version for fabric 1.21.5; keeping modrinth:beta 1.0"), err);

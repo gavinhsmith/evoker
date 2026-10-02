@@ -47,7 +47,7 @@ class ModrinthTest {
     @Test
     void keepsRequiredAndIncompatibleDependenciesOnly() {
         alpha();
-        String err = Stderr.capture(() -> {
+        String err = Output.err(() -> {
             var r = modrinth.resolve("alpha", new Manifest.Content("latest", null, null), null, on("fabric"));
             assertEquals(List.of(new Source.Dependency("BBBB", null, false), new Source.Dependency("DDDD", null, true)),
                     r.dependencies());
@@ -88,7 +88,7 @@ class ModrinthTest {
     @Test
     void pluginOnPaperAndClientOnlyWarning() {
         mixed();
-        String err = Stderr.capture(() ->
+        String err = Output.err(() ->
                 assertEquals("plugin", modrinth.resolve("shiny", new Manifest.Content("latest", null, null), null, on("purpur")).entry().type()));
         assertTrue(err.contains("client-side only"), err);
     }

@@ -34,7 +34,7 @@ class HangarTest {
     @Test
     void latestPrefersTheReleaseChannel() {
         via();
-        String err = Stderr.capture(() -> {
+        String err = Output.err(() -> {
             Source.Resolution r = resolve("ViaVersion", "latest", PAPER);
             assertEquals("ViaVersion", r.slug());
             assertEquals(new Lock.Entry("plugin", "31", "500", "5.0.3", api.base + "/files/via.jar", null, null, null),
@@ -64,7 +64,7 @@ class HangarTest {
                          "downloads": {"PAPER": {"downloadUrl": "https://x/via4.jar", "fileInfo": {"sha256Hash": "0"}}},
                          "platformDependencies": {"PAPER": ["1.20.4"]}}
                         """.getBytes());
-        String err = Stderr.capture(() -> assertEquals("400", resolve("ViaVersion", "4.0.0", PAPER).entry().versionId()));
+        String err = Output.err(() -> assertEquals("400", resolve("ViaVersion", "4.0.0", PAPER).entry().versionId()));
         assertTrue(err.contains("not marked compatible with paper 1.21.4"), err);
     }
 
