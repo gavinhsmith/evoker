@@ -2,11 +2,14 @@ package com.gavinhsmith.evoker;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 
 public final class Main {
@@ -19,6 +22,8 @@ public final class Main {
               add <slug> [version]   add content (e.g. sodium, modrinth:lithium) and install it
               remove <slug>          remove content and whatever only it needed
               install                download whatever evoker.json / evoker.lock say is missing
+              update [slug]          move "latest" entries (and the server build) to their newest versions
+              upgrade [--dry-run]    move everything, pins included, to the newest versions for this game version
               start                  install, then run the server
               version                print the evoker version
             """;
@@ -47,11 +52,14 @@ public final class Main {
             return 1;
         }
         Main main = new Main(dir, apis);
+        List<String> rest = Arrays.asList(args).subList(1, args.length);
         try {
             switch (args[0]) {
-                case "add" -> main.add(arg(args, 1, "add <slug> [version]"), args.length > 2 ? args[2] : "latest");
-                case "remove" -> main.remove(arg(args, 1, "remove <slug>"));
+                case "add" -> main.add(arg(rest, 0, "add <slug> [version]"), rest.size() > 1 ? rest.get(1) : "latest");
+                case "remove" -> main.remove(arg(rest, 0, "remove <slug>"));
                 case "install" -> main.install(Manifest.read(dir), false, key -> false);
+                case "update" -> main.update(rest.isEmpty() ? null : rest.get(0));
+                case "upgrade" -> main.upgrade(rest.contains("--dry-run"));
                 case "start" -> {
                     return main.start();
                 }
@@ -69,9 +77,9 @@ public final class Main {
         }
     }
 
-    private static String arg(String[] args, int i, String usage) {
-        if (args.length <= i) throw new EvokerException("usage: evoker " + usage);
-        return args[i];
+    private static String arg(List<String> args, int i, String usage) {
+        if (args.size() <= i) throw new EvokerException("usage: evoker " + usage);
+        return args.get(i);
     }
 
     static void log(String message) {
@@ -109,25 +117,105 @@ public final class Main {
         log("removed " + key + " from " + Manifest.FILE);
     }
 
+    /** Re-resolves "latest" entries (all, or one and its dependencies keep their locks) and the server build. */
+    void update(String ref) {
+        Manifest manifest = Manifest.read(dir);
+        Lock before = Lock.read(dir);
+        Predicate<String> refresh = key -> true;
+        if (ref != null) {
+            String key = Manifest.key(ref);
+            if (!manifest.content().containsKey(key)) throw new EvokerException(key + " is not in " + Manifest.FILE);
+            refresh = key::equals;
+        }
+        Lock after = install(manifest, ref == null, refresh);
+        printChanges(before, after);
+    }
+
+    /**
+     * Moves every entry, pins and the server build included, to the newest version for the current game version
+     * and rewrites the pins in evoker.json. Anything without a compatible version keeps its current one (warning).
+     */
+    void upgrade(boolean dryRun) {
+        Manifest manifest = Manifest.read(dir);
+        Lock before = Lock.read(dir);
+        var unpinned = new LinkedHashMap<String, Manifest.Content>();
+        manifest.content().forEach((key, c) -> unpinned.put(key, c.url() != null ? c : new Manifest.Content("latest", null, null)));
+        var spec = manifest.server();
+        Manifest latest = new Manifest(new Manifest.ServerSpec(spec.software(), spec.version(), "latest"),
+                manifest.eula(), manifest.properties(), unpinned, manifest.evoker());
+
+        Lock after = dryRun ? plan(latest, before, true, key -> true).lock() : install(latest, true, key -> true);
+        printChanges(before, after);
+        if (dryRun) {
+            log("dry run: nothing was changed");
+            return;
+        }
+        // Write the new versions back into the entries that were pinned.
+        var content = new LinkedHashMap<String, Manifest.Content>();
+        manifest.content().forEach((key, c) -> {
+            Lock.Entry e = after.content().get(key);
+            boolean pinned = c.url() == null && !c.version().equals("latest");
+            content.put(key, pinned && e != null ? new Manifest.Content(e.version(), null, null) : c);
+        });
+        String build = spec.build().equals("latest") || after.server() == null ? spec.build() : after.server().build();
+        Manifest upgraded = new Manifest(new Manifest.ServerSpec(spec.software(), spec.version(), build),
+                manifest.eula(), manifest.properties(), content, manifest.evoker());
+        if (!upgraded.equals(manifest)) upgraded.write(dir);
+    }
+
+    private static void printChanges(Lock before, Lock after) {
+        Lock.Locked a = before.server(), b = after.server();
+        if (b != null && (a == null || !a.software().equals(b.software()) || !a.version().equals(b.version())
+                || !Objects.equals(a.build(), b.build()))) {
+            log("server: " + (a == null ? "" : a.software() + " " + a.version() + " " + Objects.toString(a.build(), "") + " -> ")
+                    + b.software() + " " + b.version() + " " + Objects.toString(b.build(), ""));
+        }
+        var keys = new TreeSet<>(before.content().keySet());
+        keys.addAll(after.content().keySet());
+        int changed = 0;
+        for (String key : keys) {
+            Lock.Entry x = before.content().get(key), y = after.content().get(key);
+            if (x != null && y != null && x.versionId().equals(y.versionId())) continue;
+            changed++;
+            if (x == null) log(key + ": added " + y.version());
+            else if (y == null) log(key + ": removed");
+            else log(key + ": " + x.version() + " -> " + y.version());
+        }
+        log(changed == 0 ? "content is up to date" : changed + " content change(s)");
+    }
+
+    /** What install will do: the resolved server and content, before anything is downloaded. */
+    private record Plan(Lock.Locked server, Server.Resolved serverDownload, Map<String, Source.Resolution> content) {
+        Lock lock() {
+            var entries = new TreeMap<String, Lock.Entry>();
+            content.forEach((key, r) -> entries.put(key, r.entry()));
+            return new Lock(Lock.VERSION, server, entries);
+        }
+    }
+
     /**
      * Brings the disk in line with evoker.json and evoker.lock. Content is only re-resolved (network) when
      * evoker.json asks for something the lock doesn't have, or refresh selects it; otherwise the lock is used as is.
      */
     Lock install(Manifest manifest, boolean updateServer, Predicate<String> refresh) {
         Lock before = Lock.read(dir);
-        Lock.Locked locked = installServer(manifest.server(), before.server(), updateServer);
+        Plan plan = plan(manifest, before, updateServer, refresh);
 
-        Map<String, Source.Resolution> content = resolveContent(manifest, before.content(), refresh);
-
-        var properties = new LinkedHashMap<>(resourcePack(content, manifest.properties()));
+        var properties = new LinkedHashMap<>(resourcePack(plan.content(), manifest.properties()));
         properties.putAll(manifest.properties());
         installer.properties(properties);
         if (manifest.eula()) installer.acceptEula();
 
+        Lock.Locked locked = plan.server();
+        Server.Resolved download = plan.serverDownload();
+        String label = locked.software() + " " + locked.version() + (locked.build() == null ? "" : " build " + locked.build());
+        locked = locked.withSha256(installer.fetch(label, locked.url(), dir.resolve(Server.jarName(locked.software())),
+                locked.sha256(), download == null ? null : download.algo(), download == null ? null : download.hash()));
+
         String levelName = installer.levelName();
         var entries = new TreeMap<String, Lock.Entry>();
         var paths = new HashSet<Path>();
-        content.forEach((key, r) -> {
+        plan.content().forEach((key, r) -> {
             Lock.Entry e = r.entry();
             Path path = installer.path(key, e, levelName);
             if (path != null) {
@@ -148,8 +236,14 @@ public final class Main {
         return lock;
     }
 
-    private Map<String, Source.Resolution> resolveContent(Manifest manifest, Map<String, Lock.Entry> locked,
-                                                          Predicate<String> refresh) {
+    private Plan plan(Manifest manifest, Lock before, boolean updateServer, Predicate<String> refresh) {
+        Server.Resolved[] download = {null};
+        Lock.Locked server = planServer(manifest.server(), before.server(), updateServer, download);
+        return new Plan(server, download[0], planContent(manifest, before.content(), refresh));
+    }
+
+    private Map<String, Source.Resolution> planContent(Manifest manifest, Map<String, Lock.Entry> locked,
+                                                       Predicate<String> refresh) {
         boolean upToDate = manifest.content().entrySet().stream().allMatch(e -> {
             Lock.Entry have = locked.get(e.getKey());
             return have != null && !refresh.test(e.getKey()) && Resolver.satisfies(have, e.getValue());
@@ -159,6 +253,29 @@ public final class Main {
         Resolver.prune(locked, manifest.content().keySet())
                 .forEach((key, e) -> kept.put(key, new Source.Resolution(null, e, null, null, null, null)));
         return kept;
+    }
+
+    /** The server to lock. Sets download[0] when a new jar must be fetched (with its upstream checksum). */
+    private Lock.Locked planServer(Manifest.ServerSpec want, Lock.Locked have, boolean update,
+                                   Server.Resolved[] download) {
+        boolean stale = have == null
+                || !want.software().equals(have.software())
+                || !want.version().equals(have.version())
+                || (!want.build().equals("latest") && !want.build().equals(have.build()));
+        if (!stale && !(update && want.build().equals("latest"))) return have;
+        Server.Resolved resolved;
+        try {
+            resolved = server.resolve(want);
+        } catch (EvokerException e) {
+            // Same software: keep what is installed (e.g. no build for a new game version yet) and let the user decide.
+            if (have == null || !have.software().equals(want.software())) throw e;
+            warn(e.getMessage() + "; keeping " + have.software() + " " + have.version()
+                    + (have.build() == null ? "" : " build " + have.build()));
+            return have;
+        }
+        if (!stale && resolved.url().equals(have.url())) return have;
+        download[0] = resolved;
+        return new Lock.Locked(want.software(), want.version(), resolved.build(), resolved.url(), null);
     }
 
     /** server.properties keys for the (single) resource pack, unless evoker.json sets them itself. */
@@ -175,32 +292,12 @@ public final class Main {
         return Map.of("resource-pack", pack.url(), "resource-pack-sha1", Objects.requireNonNullElse(pack.sha1(), ""));
     }
 
-    private Lock.Locked installServer(Manifest.ServerSpec want, Lock.Locked have, boolean update) {
-        boolean stale = have == null
-                || !want.software().equals(have.software())
-                || !want.version().equals(have.version())
-                || (!want.build().equals("latest") && !want.build().equals(have.build()));
-        Lock.Locked locked = have;
-        Server.Resolved resolved = null;
-        if (stale || (update && want.build().equals("latest"))) {
-            resolved = server.resolve(want);
-            if (stale || !resolved.url().equals(have.url())) {
-                locked = new Lock.Locked(want.software(), want.version(), resolved.build(), resolved.url(), null);
-            } else {
-                resolved = null;
-            }
-        }
-        String label = locked.software() + " " + locked.version() + (locked.build() == null ? "" : " build " + locked.build());
-        String sha256 = installer.fetch(label, locked.url(), dir.resolve(Server.jarName(locked.software())),
-                locked.sha256(), resolved == null ? null : resolved.algo(), resolved == null ? null : resolved.hash());
-        return locked.withSha256(sha256);
-    }
-
-    /** Installs, then runs the server as a child process and returns its exit code. */
+    /** Installs (with the configured auto-updates), then runs the server as a child process; returns its exit code. */
     int start() {
         Manifest manifest = Manifest.read(dir);
-        install(manifest, manifest.evoker().autoUpdateServer(), key -> false);
-        var command = Server.command(manifest.server().software(), manifest.evoker());
+        Manifest.Settings settings = manifest.evoker();
+        install(manifest, settings.autoUpdateServer(), key -> settings.autoUpdateDeps());
+        var command = Server.command(manifest.server().software(), settings);
         log("starting " + String.join(" ", command));
         Process process;
         try {

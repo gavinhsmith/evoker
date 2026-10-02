@@ -46,7 +46,7 @@ Full documentation lives in the [wiki](https://github.com/gavinhsmith/evoker/wik
 | Build, CI, releases, wiki | ✅ |
 | `install` / `start` (vanilla, paper, purpur, fabric) | ✅ |
 | `add` / `remove`, Modrinth content, dependency resolution | ✅ |
-| `update` / `upgrade` | planned |
+| `update` / `upgrade`, auto-updates | ✅ |
 | Hangar + URL sources | planned |
 | `init --git` | planned |
 | quilt, neoforge | planned |

@@ -30,6 +30,7 @@ class ResolverTest {
         public Resolution resolve(String ref, String version, String exactVersionId, Manifest.ServerSpec server) {
             calls.add(ref);
             List<V> versions = projects.get(ref);
+            if (versions.isEmpty()) throw new EvokerException(ref + " has no version");
             V v = versions.getLast();
             for (V candidate : versions) {
                 if (candidate.id().equals(exactVersionId) || candidate.version().equals(version)) v = candidate;
@@ -143,6 +144,21 @@ class ResolverTest {
         var refreshed = resolve(manifest("a", "latest"), locked, k -> true);
         assertEquals("2", refreshed.get("modrinth:a").version());
         assertEquals("2", refreshed.get("modrinth:b").version());
+    }
+
+    @Test
+    void failedResolutionKeepsTheLockedEntryAndItsDependencies() {
+        source.version("a", "1", dep("b")).version("b", "1");
+        Map<String, Lock.Entry> locked = resolve(manifest("a", "latest"));
+        source.projects.get("a").clear(); // a vanished upstream: resolving it now throws
+
+        String err = Stderr.capture(() -> {
+            var entries = resolve(manifest("a", "latest"), locked, k -> true);
+            assertEquals("1", entries.get("modrinth:a").version());
+            assertEquals(List.of("modrinth:a"), entries.get("modrinth:b").requiredBy());
+        });
+
+        assertTrue(err.contains("keeping modrinth:a 1"), err);
     }
 
     @Test

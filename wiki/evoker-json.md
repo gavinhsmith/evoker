@@ -55,6 +55,6 @@ How evoker itself behaves. Every key is optional.
 | Key | Default | Meaning |
 |---|---|---|
 | `autoUpdateServer` | `false` | On `start`, if `build` is `latest`, pick up the newest build for the current `version`. Never changes `version`. |
-| `autoUpdateDeps` | `false` | On `start`, update content entries. (Content support is coming.) |
+| `autoUpdateDeps` | `false` | On `start`, move `latest` content entries and their dependencies to their newest versions (like `evoker update`, without the server). |
 | `java` | `java` | Java executable used to run the server. |
 | `jvmArgs` | `[]` | Arguments for that JVM, e.g. `["-Xmx4G"]`. |

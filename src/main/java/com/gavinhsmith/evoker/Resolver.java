@@ -60,13 +60,22 @@ final class Resolver {
                 // ponytail: dependencies of the losing version stay in the lock; prune by re-running update if it matters
                 if (r.published().compareTo(have.published()) <= 0) continue;
             } else {
+                String lockedKey = job.key() != null
+                        ? (locked.containsKey(job.key()) ? job.key() : null)
+                        : lockedByProject.get(job.source() + ":" + job.ref());
                 String exact = job.exactVersionId();
-                if (exact == null && job.key() == null) {
+                if (exact == null && job.key() == null && lockedKey != null && !refresh.test(lockedKey)) {
                     // A dependency that was locked before keeps its locked version unless refreshed.
-                    String lockedKey = lockedByProject.get(job.source() + ":" + job.ref());
-                    if (lockedKey != null && !refresh.test(lockedKey)) exact = locked.get(lockedKey).versionId();
+                    exact = locked.get(lockedKey).versionId();
                 }
-                r = sourceNamed(job.source()).resolve(job.ref(), job.version(), exact, manifest.server());
+                try {
+                    r = sourceNamed(job.source()).resolve(job.ref(), job.version(), exact, manifest.server());
+                } catch (EvokerException e) {
+                    // Nothing compatible (or upstream trouble): keep what is installed and let the user decide.
+                    if (lockedKey == null) throw e;
+                    Main.warn(e.getMessage() + "; keeping " + lockedKey + " " + locked.get(lockedKey).version());
+                    r = keep(lockedKey, locked);
+                }
                 if (key == null) key = job.source() + ":" + r.slug();
                 keyByProject.put(job.source() + ":" + r.entry().projectId(), key);
                 if (job.parent() != null) requiredBy.computeIfAbsent(key, k -> new TreeSet<>()).add(job.parent());
@@ -95,6 +104,19 @@ final class Resolver {
             result.put(key, new Source.Resolution(r.slug(), entry, r.published(), r.dependencies(), r.algo(), r.hash()));
         });
         return result;
+    }
+
+    /** A locked entry as a resolution, depending on whatever the lock says it required. */
+    private static Source.Resolution keep(String key, Map<String, Lock.Entry> locked) {
+        Lock.Entry e = locked.get(key);
+        var deps = new ArrayList<Source.Dependency>();
+        locked.values().forEach(d -> {
+            if (d.requiredBy() != null && d.requiredBy().contains(key)) {
+                deps.add(new Source.Dependency(d.projectId(), d.versionId(), false));
+            }
+        });
+        var entry = new Lock.Entry(e.type(), e.projectId(), e.versionId(), e.version(), e.url(), e.sha256(), e.sha1(), null);
+        return new Source.Resolution(ref(key), entry, "", deps, null, null);
     }
 
     /** Keeps the evoker.json entries and whatever they (transitively) require; drops the rest, cycles included. */
