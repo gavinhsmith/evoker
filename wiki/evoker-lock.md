@@ -1,53 +1,73 @@
 # evoker.lock
 
-Records exactly what evoker installed. **Written only by evoker; don't edit it. Do commit it.**
+Exactly which files a pack resolves to. **Written only by evoker; don't edit it. Publish it with `evoker.json`.**
+
+Authoring commands (`add`, `update`, `upgrade`, ...) resolve and write the lock without installing anything. Servers and clients never resolve: they install exactly what the lock says, so every install of a pack gets the same files.
 
 ```json
 {
-  "lockVersion": 1,
+  "lockVersion": 2,
+  "game": { "version": "1.21.4", "loader": "fabric", "build": "0.16.10" },
   "server": {
-    "software": "paper",
-    "version": "1.21.4",
-    "build": "232",
-    "url": "https://fill-data.papermc.io/v1/objects/…/paper-1.21.4-232.jar",
-    "sha256": "5ee4f542…"
+    "url": "https://meta.fabricmc.net/v2/versions/loader/1.21.4/0.16.10/1.0.1/server/jar",
+    "hash": null
   },
   "content": {
+    "modrinth:sodium": {
+      "type": "mod",
+      "sides": ["client"],
+      "projectId": "AANobbMI",
+      "versionId": "…",
+      "version": "mc1.21.4-0.6.5-fabric",
+      "url": "https://cdn.modrinth.com/…",
+      "hash": "sha512:…"
+    },
+    "modrinth:distant-horizons": {
+      "type": "mod",
+      "sides": ["client"],
+      "optional": true,
+      "title": "Distant Horizons",
+      "description": "See farther without lag.",
+      "projectId": "uCdwusMi",
+      "…": "…"
+    },
     "modrinth:fabric-api": {
       "type": "mod",
-      "projectId": "P7dR8mSH",
-      "versionId": "…",
-      "version": "0.119.4+1.21.4",
-      "url": "https://cdn.modrinth.com/…",
-      "sha256": "…",
-      "sha1": "…",
-      "requiredBy": [ "modrinth:modmenu" ]
+      "sides": ["client", "server"],
+      "requiredBy": ["modrinth:sodium", "modrinth:lithium"],
+      "…": "…"
     }
   }
 }
 ```
 
+## `game`
+
+The resolved game version, loader and exact build. Clients set these in the Prism instance; servers download the matching server.
+
+## `server`
+
+Present when the pack's `side` includes `server`: where the server jar or installer comes from, and its upstream hash. Some upstreams publish no checksum (Fabric, Quilt, NeoForge, Spigot's BuildTools); then `hash` is `null` and each server pins the file it first downloads in its own state (see [Servers](Servers#evoker-folder)).
+
 ## Content entries
 
 | Field | Meaning |
 |---|---|
-| `type` | `mod`, `plugin`, `datapack` or `resourcepack`; decides where the file goes |
-| `projectId` | Stable upstream id; the file is named `<source>-<projectId>` |
+| `type` | `mod`, `plugin`, `datapack`, `resourcepack` or `shaderpack`; decides where the file goes |
+| `sides` | Where it is installed: `client`, `server` or both |
+| `optional` | Players choose whether to install it (clients only; servers always install it) |
+| `title`, `description` | Optional entries only: shown when players are asked |
+| `projectId` | Stable upstream id; installed files are named `<source>-<projectId>.<ext>` |
 | `versionId`, `version` | Exact upstream version (id and readable number) |
-| `url`, `sha256` | Where it was downloaded from, and evoker's hash of the file |
-| `sha1` | Upstream SHA-1 (used for resource packs in `server.properties`) |
-| `requiredBy` | Entries that need it. Present only on dependencies; once nothing needs it and it isn't in `evoker.json`, it is removed. |
-
-## How it is used
-
-- **`install` / `start`** compare the lock with `evoker.json`. If they still agree, the locked file is used as-is: evoker hashes the file on disk and skips the download when it matches `sha256`.
-- If the file is missing or different, evoker downloads it from `url` again.
-- `sha256` is always computed by evoker itself. Upstream checksums (Mojang SHA-1, Paper SHA-256, Purpur MD5) are also checked during the first download.
+| `url` | Where the file is downloaded from |
+| `hash` | `<algorithm>:<hex>`: the upstream hash (Modrinth `sha512`, Hangar `sha256`), or for `url` entries the `sha256` evoker computed when the entry was added or updated |
+| `sha1` | Resource packs on servers only: for `resource-pack-sha1` in `server.properties` |
+| `requiredBy` | Present only on dependencies: the entries that need it. A dependency is installed on the sides of the entries that need it, and only when they are installed (an unchosen optional entry brings no dependencies). Once nothing needs it, it is removed. |
 
 ## Hash mismatch
 
-If a re-download no longer matches `sha256`, the file at that URL changed after you locked it. evoker **keeps the existing file**, leaves the lock alone, and prints a warning. Nothing is blocked: investigate, then change `evoker.json` (for example the build) to accept a new file.
+A download that doesn't match `hash` is **never installed**: the file at that URL changed after it was locked. evoker keeps whatever is there, warns, and carries on. For a `url` entry, the pack author's `evoker update` accepts the new file.
 
 ## `lockVersion`
 
-The lock format version. An evoker that finds a newer `lockVersion` than it understands refuses to touch the lock.
+The lock format version: `2` for packs. An evoker that finds a newer `lockVersion` than it understands refuses to use the lock. Version `1` locks (evoker 0.3 and older) aren't read; start the pack again with `evoker create`.

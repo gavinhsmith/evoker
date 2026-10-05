@@ -3,5 +3,8 @@
 - [Commands](Commands)
 - [evoker.json](evoker-json)
 - [evoker.lock](evoker-lock)
+- [Servers](Servers)
+- [Clients](Clients)
+- [Configuration](Configuration)
 - [Server Software](Server-Software)
 - [Content Sources](Content-Sources)

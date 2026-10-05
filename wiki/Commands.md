@@ -1,58 +1,69 @@
 # Commands
 
-Run every command inside the server folder: `evoker <command>` (or `java -jar evoker.jar <command>` without the launcher). Options take their value either way, `--type mod` or `--type=mod`; an unknown option is an error.
+`evoker <command>` (or `java -jar evoker.jar <command>` without the launcher). Options take their value either way, `--type mod` or `--type=mod`; an unknown option is an error.
+
+There are three groups: **pack** commands edit a pack (run them in the pack folder), **server** commands install and run a server (run them in the server folder), and **client** commands manage Prism instances (run them anywhere).
+
+## Pack
+
+Pack commands only change `evoker.json` and `evoker.lock`. They resolve versions and dependencies online, but **never install anything**; that's what `install` is for. (`url` downloads the file once, to a temporary location, to hash it.)
 
 | Command | What it does |
 |---|---|
-| `init [software] [version] [--git]` | Writes a starter `evoker.json` (default `paper` on the newest Minecraft release). Refuses if one exists. `--git` runs `git init` and writes a server `.gitignore` (see [Getting Started](Getting-Started#git)). |
-| `add <slug> [version]` | Adds content to `evoker.json` (`latest` unless you give a version), resolves it and its dependencies, and downloads them. `sodium` means `modrinth:sodium`; use `hangar:<slug>` for Hangar. Adding an existing entry changes its version. |
-| `add <url> --type <type> [--name <name>]` | Adds a file from a URL as `url:<name>`. `--type` is required: `mod`, `plugin`, `datapack` or `resourcepack`. See [Content Sources](Content-Sources#url). |
-| `import <pack>` | Imports a Modrinth modpack: a `.mrpack` file, a URL to one, or a modpack's Modrinth slug (newest release). See [Content Sources](Content-Sources#modpacks-mrpack). |
-| `remove <slug>` | Removes the entry from `evoker.json`, then deletes it and every dependency nothing else needs anymore. |
-| `install` | Brings the folder in line with `evoker.json` and `evoker.lock`: resolves anything new or changed in `evoker.json`, downloads whatever is missing, deletes what was removed, applies `properties` and `eula`. |
-| `update [slug]` | Moves `latest` entries to their newest compatible versions, and the server to its newest build if `build` is `latest`. Pinned entries stay. With a slug, updates only that entry (and not the server). Prints what changed. |
-| `upgrade [--list] [--output=text\|json]` | Moves **everything** (pinned entries and a pinned server `build` included) to the newest versions for the current game version, and rewrites the pins in `evoker.json`. `--list` prints the changes without touching anything; add `--output=json` for other tools, see [upgrade --list --output=json](#upgrade---list---outputjson). |
-| `start` | `install` (plus the auto-updates enabled in the `evoker` block), then runs the server as a child process. The console is passed through; evoker exits with the server's exit code. |
-| `list [--output=text\|json]` | Shows the server and every content entry: locked version, whether it is `latest`, `pinned`, a dependency (and of what) or a URL file, and entries in `evoker.json` that aren't installed yet. Offline. `--output=json` is for other tools; see [list --output=json](#list---outputjson). |
-| `command` | Prints the command `start` would run, on one line, for what is in `evoker.lock` (arguments containing spaces are double-quoted). Offline. Errors if nothing is installed yet. See [Running the server yourself](#running-the-server-yourself). |
+| `create <name> <loader> [game_version] [client\|server\|both] [--git]` | Writes a new `evoker.json` (and an empty `evoker.lock`) in the current folder. Refuses if one exists. `game_version` defaults to the newest release. The side defaults to `server` for `paper`, `purpur` and `spigot`, and `both` otherwise. `--git` also runs `git init`. |
+| `add <source:name>[@version] [--type <type>] [--side <side>] [--optional]` | Adds content: `latest` unless a version is given, which pins it. `sodium` means `modrinth:sodium`. `--type` only when the project is published as more than one type; `--side` only to override the [inferred side](Content-Sources#sides). `--optional` lets players choose. Adding an existing entry replaces its settings. |
+| `url <name> <url> <type> [--side <side>] [--optional]` | Adds a file from a URL as `url:<name>`. `--side` is required unless the type implies it (`plugin`, `datapack`: server; `shaderpack`: client). See [Content Sources](Content-Sources#url). |
+| `remove <name>` | Removes the entry, and every dependency nothing else needs anymore. |
+| `list [type] [--output=text\|json]` | Lists the game, loader and content (or one type of content): locked version, `latest` / `pinned`, side, `optional`, and what each dependency is required by. See [list --output=json](#list---outputjson). |
+| `update [name]` | Moves `latest` entries (and the build, if `latest`) to their newest versions for the current game version. Pinned entries stay. With a name, updates only that entry, moving its pin if it has one. Re-downloads `url` entries to accept changed files. |
+| `update list [--output=text\|json]` | Prints what `update` would change (`name: old -> new`), changing nothing. |
+| `upgrade [game_version]` | Moves the pack to `game_version` (default: the newest release) and everything to its newest version for it. If there are pinned entries, asks whether to upgrade them too (`--pinned` / `--keep-pinned` answer without asking). |
+| `upgrade list [game_version] [--output=text\|json]` | Prints what `upgrade` would change, changing nothing. Pinned entries are listed and marked. |
+| `import <pack.mrpack \| url \| modrinth-slug>` | Writes a new pack from a Modrinth modpack. See [Content Sources](Content-Sources#modpacks-mrpack). |
+
+Errors print `error: ...` and exit with code 1; a failed command leaves `evoker.json` and `evoker.lock` unchanged. Warnings print `evoker: warning: ...` and never stop the command.
+
+### Upgrades never fail on content
+
+`update` and `upgrade` never fail because one entry has no newer (or no compatible) version: that entry keeps its locked version, with a warning. Making sure the pack works is up to you: remove the entry, wait for a release, or pin something else.
+
+`upgrade` does fail if the loader has no build for the new game version: nothing is changed.
+
+## Server
+
+| Command | What it does |
+|---|---|
+| `install server <pack-url>` / `install server --local <path> [--accept-eula]` | Installs the pack as a server in the **current folder**: the server jar, every server-side entry, and the [`.evoker` folder](Servers#evoker-folder). Asks you to accept the Minecraft EULA unless `--accept-eula` is given. |
+| `server update` | Fetches the pack again from where it was installed from, and applies the changes. |
+| `server update list [--output=text\|json]` | Prints what `server update` would change, changing nothing. |
+| `server start` | Runs `server update` (unless `updateOnStart` is off), then runs the server as a child process. The console is passed through; evoker exits with the server's exit code. |
+| `server command` | Prints the command `server start` runs, on one line (arguments containing spaces are double-quoted). Offline. |
+
+See [Servers](Servers).
+
+## Client
+
+| Command | What it does |
+|---|---|
+| `install <pack-url>` / `install --local <path>` | Installs the pack as a new Prism Launcher instance: client-side entries, asks about optional ones, and sets up updating before every launch. `install client …` is the same. |
+| `client update <pack>` | Checks for a newer version of the pack and installs it. This is what Prism runs before every launch. |
+| `client options <pack>` | Asks about the optional entries again and installs or removes them to match. |
+
+`<pack>` is the pack's name or its instance folder. See [Clients](Clients).
+
+## Everywhere
+
+| Command | What it does |
+|---|---|
+| `config [path] [value]` | Shows or changes how evoker behaves. See [Configuration](Configuration). |
 | `version` | Prints the evoker version. |
 | `help` | Prints the command list. |
 
-Errors print `error: ...` and exit with code 1; a failed `add` leaves `evoker.json` unchanged. Warnings print `evoker: warning: ...` and never stop the command.
+## Pack URLs
 
-## When evoker goes online
+A pack URL is the folder that holds `evoker.json`, e.g. `https://raw.githubusercontent.com/me/pack/main/`. A URL ending in `/evoker.json` works too. evoker fetches `evoker.json`, `evoker.lock` and, if present, `icon.png` or `icon.jpg` from it. A pack without `evoker.lock` can't be installed.
 
-`install` and `start` only contact Modrinth when `evoker.json` asks for something the lock doesn't have (a new entry, or a changed pin). Otherwise they use the lock as-is, and only download files that are missing or don't match their locked hash.
-
-Resolving keeps the locked version of every entry you didn't touch: `add` doesn't update your other mods.
-
-## Changing the game version
-
-Edit `version` in `evoker.json`, then run `evoker upgrade` (try `--list` first). Everything moves to its newest release for the new version.
-
-Anything without a compatible version yet **keeps its current version** and prints a warning:
-
-```
-evoker: warning: modrinth:sodium has no version for fabric 1.21.5; keeping modrinth:sodium mc1.21.4-0.6.13-fabric
-```
-
-`start` is never blocked by this. Making sure the server actually works with what you installed is up to you: remove the entry, wait for a release, or pin something else.
-
-The same rule applies whenever evoker can't resolve something it already has installed (an upstream project removed, for example): it keeps the installed version and warns.
-
-## Stopping the server
-
-Type `stop` in the console, or press Ctrl+C. Ctrl+C reaches the server too, so it saves before exiting; evoker waits for it.
-
-## Running the server yourself
-
-To run the server from systemd, Docker, a hosting panel or your own script instead of `evoker start`, install first, then run what `command` prints:
-
-```sh
-evoker install && eval "exec $(evoker command)"
-```
-
-Ask evoker each time rather than copying the line once: for NeoForge it contains the build number, which changes on `update` / `upgrade`. Unlike `start`, this skips the auto-updates in the `evoker` block.
+`--local` takes the pack folder (or its `evoker.json`) on disk instead. Installs remember where they came from, so a local pack updates when its files change.
 
 ## list --output=json
 
@@ -60,11 +71,11 @@ Only the JSON goes to stdout. Content is a flat list sorted by `key`; every fiel
 
 ```json
 {
-  "format": 1,
-  "server": { "software": "fabric", "version": "1.21.4", "build": "0.19.5", "pinned": false, "installed": true },
+  "format": 2,
+  "game": { "version": "1.21.4", "loader": "fabric", "build": "0.16.10", "pinned": false },
   "content": [
     { "key": "modrinth:fabric-api", "type": "mod", "projectId": "P7dR8mSH", "version": "0.110.0",
-      "pinned": null, "requiredBy": ["modrinth:sodium"], "installed": true }
+      "pinned": null, "sides": ["client", "server"], "optional": false, "requiredBy": ["modrinth:sodium"] }
   ]
 }
 ```
@@ -72,33 +83,28 @@ Only the JSON goes to stdout. Content is a flat list sorted by `key`; every fiel
 | Field | Meaning |
 |---|---|
 | `format` | Version of this output. Changes only when fields are removed or change meaning. |
-| `server.build` | The locked build, or the build asked for in `evoker.json` (e.g. `latest`) if nothing is installed. |
-| `server.pinned` | `build` in `evoker.json` is something other than `latest`. |
-| `key`, `type`, `projectId`, `version` | As in [evoker.lock](evoker-lock). For an entry that isn't installed, `version` is what `evoker.json` asks for, and `type` / `projectId` are `null` (except URL entries, which declare `type`). URL entries have no `version`. |
+| `game.pinned` | `build` in `evoker.json` is something other than `latest`. |
+| `key`, `type`, `projectId`, `version`, `sides`, `optional` | As in [evoker.lock](evoker-lock). URL entries have no `version`. |
 | `pinned` | `true` / `false` for entries in `evoker.json`; `null` for dependencies and URL entries. |
 | `requiredBy` | Keys of the entries that need this one. Empty for entries only you asked for. |
-| `installed` | `false` when the entry is in `evoker.json` but not in the lock yet (run `evoker install`). |
 
-## upgrade --list --output=json
-
-`--output=json` needs `--list`. Only the JSON goes to stdout; entries that keep their version because nothing compatible exists are still reported as warnings on stderr.
+## update list / upgrade list --output=json
 
 ```json
 {
-  "format": 1,
-  "server": {
-    "from": { "software": "fabric", "version": "1.21.4", "build": "0.19.5" },
-    "to": { "software": "fabric", "version": "1.21.4", "build": "0.19.6" }
-  },
+  "format": 2,
+  "game": { "from": { "version": "1.21.4", "build": "0.16.10" }, "to": { "version": "1.21.5", "build": "0.16.14" } },
   "content": [
-    { "key": "modrinth:sodium", "change": "updated", "from": "0.6.5", "to": "0.6.9" },
-    { "key": "modrinth:fabric-api", "change": "added", "from": null, "to": "0.110.0" }
+    { "key": "modrinth:sodium", "change": "updated", "from": "0.6.5", "to": "0.6.13", "pinned": false },
+    { "key": "modrinth:fabric-api", "change": "added", "from": null, "to": "0.128.0", "pinned": null },
+    { "key": "modrinth:terralith", "change": "kept", "from": "2.5.8", "to": "2.5.8", "pinned": true }
   ]
 }
 ```
 
 | Field | Meaning |
 |---|---|
-| `format` | Version of this output, as for `list`. |
-| `server` | `null` when the server doesn't change. `from` is `null` when no server is installed yet. |
-| `content` | Only entries that change, sorted by `key`. `change` is `added`, `removed` or `updated`; `from` / `to` are versions, `null` where there is none (an added or removed side, or a URL entry). |
+| `game` | `null` when the game version and build don't change. |
+| `content` | Only entries that change, plus (for `upgrade list`) pinned entries, sorted by `key`. `change` is `added`, `removed`, `updated`, or `kept` (pinned and not upgraded, or no compatible version: also a warning on stderr). `from` / `to` are versions, `null` where there is none. |
+
+`server update list` prints the same shape, with `pinned` always `null`.
