@@ -9,7 +9,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Properties;
 
-/** Puts files on disk and keeps server.properties / eula.txt in line with evoker.json. */
+/** Puts files into a server folder, and sets the few things evoker writes outside them (eula.txt, resource-pack). */
 final class Installer {
     private final Path dir;
     private final Http http;
@@ -20,25 +20,25 @@ final class Installer {
     }
 
     /**
-     * Makes target hold the file at url and returns the sha256 to lock.
+     * Makes target hold the file at url, and returns its hash (lock format).
      * <p>
-     * With a locked hash: a matching file on disk is kept without downloading; a download that no longer
-     * matches the lock (the upstream file changed) is discarded with a warning and the lock is kept.
+     * With a hash: a matching file on disk is kept without downloading, and a download that doesn't match
+     * (the upstream file changed) is never installed: a warning, and whatever is there stays. Without one,
+     * whatever url serves is installed and its sha256 returned, for the caller to pin.
      */
-    String fetch(String label, String url, Path target, String lockedSha256, String algo, String expected) {
-        if (lockedSha256 != null && Files.exists(target) && lockedSha256.equals(Http.sha256(target))) {
-            return lockedSha256;
-        }
+    String fetch(String label, String url, Path target, String hash) {
+        String algo = hash == null ? "SHA-256" : Http.algo(hash);
+        if (hash != null && Files.exists(target) && hash.equals(Http.hash(target, algo))) return hash;
         Main.log("downloading " + label);
-        Http.Fetched fetched = http.download(url, target.getParent(), algo, expected);
+        Http.Fetched fetched = http.download(url, target.getParent(), algo);
         try {
-            if (lockedSha256 != null && !lockedSha256.equals(fetched.sha256())) {
+            if (hash != null && !hash.equals(fetched.hash())) {
                 Main.warn(label + ": download does not match " + Lock.FILE + " (upstream file changed?), "
                         + (Files.exists(target) ? "keeping the existing file" : "not installing it"));
-                return lockedSha256;
+                return hash;
             }
             Files.move(fetched.file(), target, StandardCopyOption.REPLACE_EXISTING);
-            return fetched.sha256();
+            return fetched.hash();
         } catch (IOException e) {
             throw new EvokerException("cannot write " + target + ": " + e.getMessage(), e);
         } finally {
@@ -47,8 +47,8 @@ final class Installer {
     }
 
     /**
-     * Where a content entry lives: {@code <source>-<projectId>.<ext>} in mods/, plugins/ or the world's datapacks/.
-     * Resource packs are not stored (server.properties points at their URL), so they have no path.
+     * Where a content entry lives on a server: {@code <source>-<projectId>.<ext>} in mods/, plugins/ or the
+     * world's datapacks/. Resource packs aren't stored (server.properties points at their URL), so they have no path.
      */
     Path path(String key, Lock.Entry entry, String levelName) {
         String name = Resolver.source(key) + "-" + entry.projectId();
@@ -62,15 +62,7 @@ final class Installer {
 
     /** The world folder, from server.properties (Minecraft's default is "world"). */
     String levelName() {
-        Path file = dir.resolve("server.properties");
-        if (!Files.exists(file)) return "world";
-        Properties props = new Properties();
-        try (InputStream in = Files.newInputStream(file)) {
-            props.load(in);
-        } catch (IOException e) {
-            throw new EvokerException("cannot read " + file + ": " + e.getMessage(), e);
-        }
-        String name = props.getProperty("level-name", "").trim();
+        String name = load().getProperty("level-name", "").trim();
         return name.isEmpty() ? "world" : name;
     }
 
@@ -82,48 +74,45 @@ final class Installer {
         }
     }
 
-    /** Downloads url only to hash it (for files evoker doesn't store, like resource packs). */
-    Http.Fetched hash(String label, String url) {
-        Main.log("hashing " + label);
-        Http.Fetched fetched = http.download(url, dir, null, null);
-        Http.deleteQuietly(fetched.file());
-        return fetched;
-    }
-
     /** Sets the given keys in server.properties, leaving every other key alone. Writes only on change. */
-    void properties(Map<String, Object> wanted) {
-        if (wanted.isEmpty()) return;
+    void properties(Map<String, String> wanted) {
+        Properties props = load();
+        if (wanted.entrySet().stream().allMatch(e -> e.getValue().equals(props.getProperty(e.getKey())))) return;
+        wanted.forEach(props::setProperty);
         Path file = dir.resolve("server.properties");
-        Properties props = new Properties();
-        try {
-            if (Files.exists(file)) {
-                try (InputStream in = Files.newInputStream(file)) {
-                    props.load(in);
-                }
-            }
-            boolean changed = false;
-            for (var e : wanted.entrySet()) {
-                String value = String.valueOf(e.getValue());
-                if (!value.equals(props.getProperty(e.getKey()))) {
-                    props.setProperty(e.getKey(), value);
-                    changed = true;
-                }
-            }
-            if (!changed) return;
-            try (OutputStream out = Files.newOutputStream(file)) {
-                props.store(out, "Minecraft server properties (keys from evoker.json are set by evoker)");
-            }
+        try (OutputStream out = Files.newOutputStream(file)) {
+            props.store(out, "Minecraft server properties");
         } catch (IOException e) {
             throw new EvokerException("cannot update " + file + ": " + e.getMessage(), e);
+        }
+    }
+
+    private Properties load() {
+        Path file = dir.resolve("server.properties");
+        Properties props = new Properties();
+        if (!Files.exists(file)) return props;
+        try (InputStream in = Files.newInputStream(file)) {
+            props.load(in);
+        } catch (IOException e) {
+            throw new EvokerException("cannot read " + file + ": " + e.getMessage(), e);
+        }
+        return props;
+    }
+
+    boolean eulaAccepted() {
+        Path file = dir.resolve("eula.txt");
+        try {
+            return Files.exists(file) && Files.readString(file).contains("eula=true");
+        } catch (IOException e) {
+            throw new EvokerException("cannot read " + file + ": " + e.getMessage(), e);
         }
     }
 
     void acceptEula() {
         Path file = dir.resolve("eula.txt");
         try {
-            if (Files.exists(file) && Files.readString(file).contains("eula=true")) return;
             Files.writeString(file, """
-                    # Accepted via "eula": true in evoker.json (https://aka.ms/MinecraftEULA)
+                    # Accepted with evoker install server (https://aka.ms/MinecraftEULA)
                     # evoker only writes this file. You, the server owner, remain responsible for following the
                     # Minecraft EULA and the Minecraft Usage Guidelines (https://www.minecraft.net/en-us/usage-guidelines).
                     eula=true

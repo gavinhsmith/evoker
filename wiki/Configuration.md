@@ -9,7 +9,7 @@ evoker config jvmArgs '["-Xmx6G"]' # change it
 evoker config updateOnStart false
 ```
 
-A value is read as JSON (`false`, `4`, `["-Xmx6G"]`), or as a plain string when it isn't valid JSON (`D:\Games\Prism\instances`). Unknown settings and values of the wrong kind are errors.
+List and true/false settings take JSON (`["-Xmx6G"]`, `false`); the others take the text as typed (`D:\Games\Prism\instances`). Unknown settings and values of the wrong kind are errors.
 
 ## Which settings
 
@@ -32,4 +32,4 @@ It depends on where you run it:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `instanceDir` | Prism's usual folder (see [Clients](Clients#setup)) | Where Prism Launcher keeps its instances. |
+| `instanceDir` | empty: Prism's usual folder (see [Clients](Clients#setup)) | Where Prism Launcher keeps its instances. |

@@ -71,10 +71,19 @@ record Manifest(String name, String side, Game game, Map<String, Content> conten
         Path file = dir.resolve(FILE);
         if (!Files.exists(file)) throw new EvokerException("no " + FILE + " in " + dir + " (run evoker create)");
         try {
-            return Json.MAPPER.readValue(file, Manifest.class);
+            return of(Json.MAPPER.readTree(file), FILE);
+        } catch (JacksonException e) {
+            throw new EvokerException("invalid " + FILE + ": " + e.getOriginalMessage(), e);
+        }
+    }
+
+    /** Parses an evoker.json; where names it in errors. */
+    static Manifest of(JsonNode json, String where) {
+        try {
+            return Json.MAPPER.treeToValue(json, Manifest.class);
         } catch (JacksonException e) {
             Throwable cause = e.getCause() instanceof EvokerException ee ? ee : e;
-            throw new EvokerException("invalid " + FILE + ": " + cause.getMessage(), e);
+            throw new EvokerException("invalid " + where + ": " + cause.getMessage(), e);
         }
     }
 

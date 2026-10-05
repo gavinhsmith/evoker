@@ -33,7 +33,7 @@ evoker downloads the installer and runs it:
 - neoforge: `java -jar neoforge-installer.jar --installServer .`
 - spigot: `java -jar BuildTools.jar --rev <build> --compile spigot --output-dir <server folder> --final-name server.jar --nogui`, run inside `.evoker/buildtools/` (where BuildTools clones and compiles). Spigot publishes no server downloads, so it is built locally: this needs **git** and takes **several minutes**, but only once per build. Unless you specifically need Spigot, `paper` runs the same plugins and downloads in seconds.
 
-The installer's output is shown in the console as it runs, and also saved to `.evoker/installer.log`. evoker records what it installed in `.evoker/installed.json` and only runs the installer again when the loader, version, build or installer changes. A failing installer is an error.
+The installer's output is shown in the console as it runs, and also saved to `.evoker/installer.log`. evoker records what it installed in `.evoker/installer.stamp` and only runs the installer again when the loader, version, build or installer changes. A failing installer is an error.
 
 ## How the server is launched
 

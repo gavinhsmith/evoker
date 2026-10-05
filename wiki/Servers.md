@@ -76,4 +76,5 @@ evoker's state for this server. Don't edit it; deleting it makes evoker forget t
 | `evoker.json`, `evoker.lock` | The pack as last installed. `server update` compares the fetched pack with these. |
 | `installed.json` | Every file evoker installed, with its hash. Also pins the server jar or installer when its upstream publishes no checksum. |
 | `installer.log` | Output of the last installer run (Quilt, NeoForge, Spigot). |
+| `installer.stamp` | Which loader, version, build and installer last ran, so the installer only runs again when one of them changes. |
 | `buildtools/` | Spigot only: BuildTools' clones, so later builds are faster. Safe to delete. |

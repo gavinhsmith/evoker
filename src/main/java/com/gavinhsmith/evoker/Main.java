@@ -44,6 +44,17 @@ public final class Main {
                                      show what upgrade would change
               import <pack>          start a pack from a Modrinth modpack (.mrpack file, URL, or modpack slug)
 
+            server commands (in the server folder):
+              install server <pack-url> | --local <pack-folder> [--accept-eula]
+                                     install a pack as a server in this folder
+              server update          fetch the pack again and apply its changes
+              server update list [--output=text|json]
+                                     show what server update would change
+              server start           update (see updateOnStart), then run the server
+              server command         print the command that starts the server (for systemd, Docker, panels)
+
+              config [setting] [value] [--user]
+                                     show or change evoker's own settings (this server's, or with --user yours)
               version                print the evoker version
             """;
 
@@ -85,8 +96,9 @@ public final class Main {
             String output = flags.getOrDefault("--output", "text");
             if (!output.equals("text") && !output.equals("json")) throw new EvokerException("--output must be text or json");
             boolean list = !rest.isEmpty() && rest.get(0).equals("list");
-            if (output.equals("json") && !args[0].equals("list") && !list) {
-                throw new EvokerException("--output=json only works with list, update list and upgrade list");
+            boolean serverList = args[0].equals("server") && rest.size() > 1 && rest.get(1).equals("list");
+            if (output.equals("json") && !args[0].equals("list") && !list && !serverList) {
+                throw new EvokerException("--output=json only works with list, update list, upgrade list and server update list");
             }
             switch (args[0]) {
                 case "create" -> main.create(rest, flags.containsKey("--git"));
@@ -108,6 +120,20 @@ public final class Main {
                     main.upgrade(versions.isEmpty() ? null : versions.get(0), pinned, list, output);
                 }
                 case "import" -> main.importPack(arg(rest, 0, "import <file.mrpack | url | modrinth-slug>"));
+                case "install" -> main.install(rest, flags);
+                case "server" -> {
+                    var folder = new ServerFolder(dir, main.http);
+                    switch (arg(rest, 0, "server start | update [list] | command")) {
+                        case "start" -> {
+                            return folder.start();
+                        }
+                        case "update" -> folder.update(serverList, output);
+                        case "command" -> System.out.println(folder.command().stream()
+                                .map(a -> a.matches(".*\\s.*") ? '"' + a + '"' : a).collect(Collectors.joining(" ")));
+                        default -> throw new EvokerException("usage: evoker server start | update [list] | command");
+                    }
+                }
+                case "config" -> System.out.println(main.config(rest, flags.containsKey("--user")));
                 case "version", "--version" -> System.out.println("evoker " + VERSION);
                 case "help", "-h", "--help" -> System.out.print(USAGE);
                 default -> {
@@ -122,8 +148,9 @@ public final class Main {
         }
     }
 
-    private static final Set<String> VALUE_FLAGS = Set.of("--type", "--side", "--output");
-    private static final Set<String> SWITCHES = Set.of("--git", "--optional", "--pinned", "--keep-pinned");
+    private static final Set<String> VALUE_FLAGS = Set.of("--type", "--side", "--output", "--local");
+    private static final Set<String> SWITCHES = Set.of("--git", "--optional", "--pinned", "--keep-pinned",
+            "--accept-eula", "--user");
 
     /** Splits args into positional (added to positional) and flags: --flag value, --flag=value, or a bare switch. */
     static Map<String, String> flags(List<String> args, List<String> positional) {
@@ -313,8 +340,7 @@ public final class Main {
         List<String> pins = manifest.content().entrySet().stream().filter(e -> e.getValue().pinned())
                 .map(Map.Entry::getKey).toList();
         boolean move = movePins != null ? movePins
-                : listOnly || pins.isEmpty() || ask(pins.size() + " pinned entries (" + String.join(", ", pins)
-                        + "): upgrade them too?");
+                : listOnly || pins.isEmpty() || askAboutPins(pins);
 
         var content = new LinkedHashMap<String, Manifest.Content>();
         manifest.content().forEach((key, c) -> content.put(key, c.pinned() && move ? c.withVersion("latest") : c));
@@ -339,15 +365,47 @@ public final class Main {
         printChanges(before, after, upgraded, kept, "text");
     }
 
-    /** A yes/no question on the console; no (with a warning) when there is no console to ask in. */
-    private static boolean ask(String question) {
-        var console = System.console();
-        if (console == null) {
+    private static boolean askAboutPins(List<String> pins) {
+        String question = pins.size() + " pinned entries (" + String.join(", ", pins) + "): upgrade them too?";
+        if (System.console() == null) {
             warn(question + " No console to ask in, so no (pass --pinned or --keep-pinned to choose)");
             return false;
         }
+        return ask(question);
+    }
+
+    /** A yes/no question on the console; no when there is no console to ask in. */
+    static boolean ask(String question) {
+        var console = System.console();
+        if (console == null) return false;
         String answer = console.readLine("%s [y/N] ", question);
         return answer != null && answer.trim().toLowerCase().startsWith("y");
+    }
+
+    /** install server <pack-url> | install server --local <path> [--accept-eula] */
+    void install(List<String> positional, Map<String, String> flags) {
+        String usage = "install server <pack-url> | install server --local <pack-folder> [--accept-eula]";
+        String target = arg(positional, 0, usage);
+        if (!target.equals("server")) {
+            throw new EvokerException("installing a pack as a Prism instance isn't available yet; for a server: evoker " + usage);
+        }
+        String url = positional.size() > 1 ? positional.get(1) : null, local = flags.get("--local");
+        if ((url == null) == (local == null) || positional.size() > 2) throw new EvokerException("usage: evoker " + usage);
+        if (url != null && !url.startsWith("https://") && !url.startsWith("http://")) {
+            throw new EvokerException(url + " is not a pack URL; for a pack on disk use --local");
+        }
+        new ServerFolder(dir, http).install(ServerFolder.Source.of(url, local == null ? null : dir.resolve(local).toString()),
+                flags.containsKey("--accept-eula"));
+    }
+
+    /** config [setting] [value] [--user]: this server's settings in a server folder, the user's otherwise. */
+    String config(List<String> positional, boolean user) {
+        Config config = !user && Files.isDirectory(dir.resolve(ServerFolder.STATE)) ? Config.server(dir) : Config.user();
+        if (positional.isEmpty()) return config.show();
+        String key = positional.get(0);
+        if (positional.size() > 2) throw new EvokerException("usage: evoker config [setting] [value] [--user]");
+        if (positional.size() == 2) config.set(key, positional.get(1));
+        return key + " = " + config.get(key);
     }
 
     /** import <file.mrpack | url | modrinth-slug>: a Modrinth modpack becomes a new pack. */
@@ -363,7 +421,7 @@ public final class Main {
         String url = ref.startsWith("https://") || ref.startsWith("http://") ? ref
                 : modrinth.packUrl(ref.startsWith("modrinth:") ? ref.substring("modrinth:".length()) : ref);
         log("downloading " + url);
-        Path temp = http.download(url, TEMP, null, null).file();
+        Path temp = http.download(url, TEMP, null).file();
         try {
             importPack(temp);
         } finally {
@@ -497,7 +555,7 @@ public final class Main {
             return e.withHash(old.hash(), old.sha1());
         }
         log("hashing " + key);
-        Http.Fetched fetched = http.download(e.url(), TEMP, null, null);
+        Http.Fetched fetched = http.download(e.url(), TEMP, null);
         Http.deleteQuietly(fetched.file());
         return e.withHash("sha256:" + fetched.sha256(), e.type().equals("resourcepack") ? fetched.sha1() : null);
     }
@@ -544,7 +602,7 @@ public final class Main {
         return Objects.equals(x.url(), y.url()) && Objects.equals(x.hash(), y.hash());
     }
 
-    private static void printChanges(Lock before, Lock after, Manifest manifest, Set<String> kept, String output) {
+    static void printChanges(Lock before, Lock after, Manifest manifest, Set<String> kept, String output) {
         GameChange game = gameChange(before, after);
         List<Change> changes = changes(before, after, manifest, kept);
         if (output.equals("json")) {

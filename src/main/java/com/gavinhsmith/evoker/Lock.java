@@ -25,17 +25,25 @@ record Lock(int lockVersion, Game game, Server server, Map<String, Entry> conten
         Path file = dir.resolve(FILE);
         if (!Files.exists(file)) return empty();
         try {
-            JsonNode tree = Json.MAPPER.readTree(file);
-            int version = tree.path("lockVersion").asInt(1);
-            if (version > VERSION) {
-                throw new EvokerException(FILE + " was written by a newer evoker (lockVersion " + version + ")");
-            }
-            if (version < VERSION) {
-                throw new EvokerException(FILE + " is from evoker 0.3 or older; start the pack again with evoker create");
-            }
-            return Json.MAPPER.treeToValue(tree, Lock.class);
+            return of(Json.MAPPER.readTree(file), FILE);
         } catch (JacksonException e) {
             throw new EvokerException("invalid " + FILE + ": " + e.getOriginalMessage(), e);
+        }
+    }
+
+    /** Parses an evoker.lock; where names it in errors. */
+    static Lock of(JsonNode json, String where) {
+        int version = json.path("lockVersion").asInt(1);
+        if (version > VERSION) {
+            throw new EvokerException(where + " was written by a newer evoker (lockVersion " + version + ")");
+        }
+        if (version < VERSION) {
+            throw new EvokerException(where + " is from evoker 0.3 or older; start the pack again with evoker create");
+        }
+        try {
+            return Json.MAPPER.treeToValue(json, Lock.class);
+        } catch (JacksonException e) {
+            throw new EvokerException("invalid " + where + ": " + e.getOriginalMessage(), e);
         }
     }
 

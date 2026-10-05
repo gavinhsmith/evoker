@@ -28,9 +28,10 @@ final class Json {
 
     private Json() {}
 
-    /** Writes value as pretty JSON with a trailing newline. */
+    /** Writes value as pretty JSON with a trailing newline, creating missing folders. */
     static void write(Path file, Object value) {
         try {
+            Files.createDirectories(file.toAbsolutePath().getParent());
             Files.writeString(file, MAPPER.writeValueAsString(value) + "\n");
         } catch (IOException e) {
             throw new EvokerException("cannot write " + file + ": " + e.getMessage(), e);

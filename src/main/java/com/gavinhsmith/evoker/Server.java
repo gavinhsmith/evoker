@@ -51,9 +51,9 @@ final class Server {
         };
     }
 
-    static final String STAMP = ".evoker-installed";
-    static final String INSTALLER_LOG = ".evoker-installer.log";
-    static final String BUILDTOOLS_DIR = ".evoker-buildtools";
+    static final String STAMP = ".evoker/installer.stamp";
+    static final String INSTALLER_LOG = ".evoker/installer.log";
+    static final String BUILDTOOLS_DIR = ".evoker/buildtools";
 
     /**
      * For installer-based software, runs the installer unless the stamp file says this exact
