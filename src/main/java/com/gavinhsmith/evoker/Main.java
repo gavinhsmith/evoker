@@ -496,9 +496,7 @@ public final class Main {
             }
         }
         if (!skipped.isEmpty()) warn("skipping " + skipped.size() + " files evoker doesn't handle: " + skipped);
-        if (pack.overrides() > 0) {
-            warn(pack.overrides() + " override files (configs, mostly) aren't supported yet and were skipped");
-        }
+        Mrpack.extractOverrides(zip, dir);
 
         String name = pack.name().isBlank() ? "Imported pack" : pack.name();
         Manifest manifest = new Manifest(name, "both", pack.game(), content);
@@ -507,7 +505,8 @@ public final class Main {
         lock.write(dir);
         long fromModrinth = content.keySet().stream().filter(k -> k.startsWith("modrinth:")).count();
         log("imported " + name + " " + pack.version() + " (" + pack.game().loader() + " " + pack.game().version() + "): "
-                + fromModrinth + " from Modrinth, " + (content.size() - fromModrinth) + " from URLs");
+                + fromModrinth + " from Modrinth, " + (content.size() - fromModrinth) + " from URLs, "
+                + pack.overrides() + " override files");
     }
 
     /** The last path segment without extension, reduced to characters safe in a file name. */
@@ -531,7 +530,7 @@ public final class Main {
         Predicate<String> refreshed = refresh;
         Map<String, Lock.Entry> content = planContent(manifest, before.content(), refresh);
         content.replaceAll((key, e) -> hash(key, e, before.content().get(key), refreshed.test(key)));
-        return new Lock(Lock.VERSION, game.game(), game.server(), content);
+        return new Lock(Lock.VERSION, game.game(), game.server(), content, Overrides.scan(dir));
     }
 
     private record GamePlan(Lock.Game game, Lock.Server server) {}

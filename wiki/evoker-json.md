@@ -9,6 +9,7 @@ A pack is a folder:
 | `evoker.json` | This file. |
 | `evoker.lock` | Exactly which files the pack resolves to. Written by evoker. See [evoker.lock](evoker-lock). |
 | `icon.png` or `icon.jpg` | Optional. Used as the Prism instance icon. |
+| `overrides/`, `client-overrides/`, `server-overrides/` | Optional. Files installed as they are, mostly configs. See [Overrides](Overrides). |
 
 Publish the folder anywhere that serves plain files (a GitHub repo works: `https://raw.githubusercontent.com/<you>/<pack>/main/`). That folder URL is the **pack URL**.
 

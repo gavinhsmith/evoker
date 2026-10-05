@@ -136,6 +136,6 @@ evoker import https://…/MyPack.mrpack # a URL
 2. **Files:** every file becomes an entry. Its side and `optional` come from the file's `env` (`client` / `server`: `required`, `optional` or `unsupported`); `optional` on the client makes the entry optional.
    - Files Modrinth recognizes (by hash) become `modrinth:<slug>` entries **pinned to the modpack's version**, so they upgrade like any other entry.
    - Other files become `url:<file name>` entries.
-3. **Overrides** (`overrides/`, `client-overrides/`, `server-overrides/`: configs, mostly) aren't supported yet; evoker lists what it skipped.
+3. **Overrides** (`overrides/`, `client-overrides/`, `server-overrides/`: configs, mostly) are copied into the pack folder as they are. See [Overrides](Overrides).
 
 Runs in an empty folder (it refuses if `evoker.json` exists). The import is one-time: afterwards the modpack isn't tracked.

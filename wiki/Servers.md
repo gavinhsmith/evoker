@@ -13,7 +13,7 @@ evoker install server --local ../my-pack          # a pack on disk, e.g. while w
 
 1. Fetches `evoker.json` and `evoker.lock` (see [Pack URLs](Commands#pack-urls)). The pack's `side` must include `server`.
 2. Downloads the server jar, or runs its installer. See [Server Software](Server-Software).
-3. Downloads every entry whose `sides` include `server`, optional ones included. Each file is checked against its locked hash. See [where files go](Content-Sources#types).
+3. Downloads every entry whose `sides` include `server`, optional ones included, and the pack's server [overrides](Overrides). Each file is checked against its locked hash. See [where files go](Content-Sources#types).
 4. Asks whether you accept the [Minecraft EULA](https://aka.ms/MinecraftEULA) (`--accept-eula` answers yes). Yes writes `eula.txt`; no installs everything else, and the server won't start until you accept (edit `eula.txt`, or install again with `--accept-eula`).
 5. Writes the [`.evoker` folder](#evoker-folder).
 

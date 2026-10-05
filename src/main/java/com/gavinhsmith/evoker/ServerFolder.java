@@ -15,10 +15,14 @@ import tools.jackson.core.JacksonException;
 final class ServerFolder {
     static final String STATE = ".evoker";
 
-    /** What evoker installed: the server jar (pinned by hash) and every file it owns, relative to the folder. */
-    record Installed(Lock.Server server, List<String> files) {
+    /**
+     * What evoker installed: the server jar (pinned by hash), every file it owns, and the override files it put
+     * there with their hashes (all relative to the folder).
+     */
+    record Installed(Lock.Server server, List<String> files, Map<String, String> overrides) {
         Installed {
             files = files == null ? List.of() : List.copyOf(files);
+            overrides = overrides == null ? Map.of() : Map.copyOf(overrides);
         }
     }
 
@@ -140,8 +144,10 @@ final class ServerFolder {
             if (!files.contains(old)) installer.delete("no longer in the pack", dir.resolve(old));
         }
 
+        Map<String, String> overrides = Overrides.apply(dir, "server", lock.overrideFiles(), before.overrides(),
+                requireSource(), http);
         Json.write(state.resolve("installed.json"), new Installed(new Lock.Server(lock.server().url(), hash),
-                List.copyOf(files)));
+                List.copyOf(files), overrides));
         pack.manifest().write(state);
         lock.write(state);
     }
@@ -210,7 +216,7 @@ final class ServerFolder {
 
     private Installed installed() {
         Installed installed = read("installed.json", Installed.class);
-        return installed != null ? installed : new Installed(null, null);
+        return installed != null ? installed : new Installed(null, null, null);
     }
 
     private Lock installedLock() {

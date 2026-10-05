@@ -64,6 +64,10 @@ Present when the pack's `side` includes `server`: where the server jar or instal
 | `sha1` | Resource packs on servers only: for `resource-pack-sha1` in `server.properties` |
 | `requiredBy` | Present only on dependencies: the entries that need it. A dependency is installed on the sides of the entries that need it, and only when they are installed (an unchosen optional entry brings no dependencies). Once nothing needs it, it is removed. |
 
+## `overrides`
+
+The pack's [override files](Overrides): pack path (e.g. `overrides/config/sodium-options.json`) → `sha256:<hex>`. Every pack command scans the override folders again, so run one (`evoker update`, for example) after changing a file there.
+
 ## Hash mismatch
 
 A download that doesn't match `hash` is **never installed**: the file at that URL changed after it was locked. evoker keeps whatever is there, warns, and carries on. For a `url` entry, the pack author's `evoker update` accepts the new file.

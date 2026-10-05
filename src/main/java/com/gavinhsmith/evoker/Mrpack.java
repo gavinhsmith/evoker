@@ -2,6 +2,7 @@ package com.gavinhsmith.evoker;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +15,7 @@ record Mrpack(String name, String version, Manifest.Game game, List<PackFile> fi
     /** A file the pack downloads. client / server are its env: required, optional or unsupported. */
     record PackFile(String path, String sha512, String url, String client, String server) {}
 
-    /** Reads modrinth.index.json, and counts the override files (which evoker doesn't use yet). */
+    /** Reads modrinth.index.json, and counts the override files. */
     static Mrpack read(Path zip) {
         JsonNode index;
         int overrides = 0;
@@ -52,5 +53,22 @@ record Mrpack(String name, String version, Manifest.Game game, List<PackFile> fi
                     f.path("env").path("server").asString("required")));
         }
         return new Mrpack(index.path("name").asString(), index.path("versionId").asString(), game, files, overrides);
+    }
+
+    /** Copies overrides/, client-overrides/ and server-overrides/ into a pack folder, as they are. */
+    static void extractOverrides(Path zip, Path pack) {
+        try (ZipFile z = new ZipFile(zip.toFile())) {
+            for (var it = z.entries().asIterator(); it.hasNext(); ) {
+                ZipEntry e = it.next();
+                if (e.isDirectory() || !e.getName().matches("(client-|server-)?overrides/.*")) continue;
+                Path target = Overrides.inside(pack, e.getName());
+                Files.createDirectories(target.getParent());
+                try (InputStream in = z.getInputStream(e)) {
+                    Files.copy(in, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        } catch (IOException e) {
+            throw new EvokerException("cannot extract " + zip.getFileName() + ": " + e.getMessage(), e);
+        }
     }
 }

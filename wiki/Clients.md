@@ -30,7 +30,7 @@ evoker install --local ./my-pack
 1. Fetches `evoker.json`, `evoker.lock` and the icon (see [Pack URLs](Commands#pack-urls)). The pack's `side` must include `client`.
 2. Creates a Prism instance named after the pack. An instance with that name already managed by evoker is an error (use `client update`); an unrelated one with the same name gets a number appended.
 3. Sets the instance's Minecraft and loader versions to the pack's.
-4. Downloads every entry whose `sides` include `client` into the instance, checking each file against its locked hash.
+4. Downloads every entry whose `sides` include `client` into the instance, checking each file against its locked hash, and the pack's client [overrides](Overrides).
 5. Asks about each optional entry, showing its title and description. Without a console to ask in, optional entries are left out.
 6. Sets the instance's pre-launch command to `evoker client update`.
 

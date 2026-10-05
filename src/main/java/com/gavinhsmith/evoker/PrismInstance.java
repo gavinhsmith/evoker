@@ -19,10 +19,11 @@ import tools.jackson.databind.node.ObjectNode;
 final class PrismInstance {
     static final String STATE = ".evoker";
 
-    /** Files evoker installed, relative to the instance's game folder. */
-    record Installed(List<String> files) {
+    /** Files evoker installed, and the override files with their hashes, relative to the instance's game folder. */
+    record Installed(List<String> files, Map<String, String> overrides) {
         Installed {
             files = files == null ? List.of() : List.copyOf(files);
+            overrides = overrides == null ? Map.of() : Map.copyOf(overrides);
         }
     }
 
@@ -386,7 +387,9 @@ final class PrismInstance {
                 if (!files.contains(old)) installer.delete("no longer wanted", game.resolve(old));
             }
         }
-        Json.write(state.resolve("installed.json"), new Installed(List.copyOf(files)));
+        Map<String, String> overrides = Overrides.apply(game, "client", lock.overrideFiles(),
+                before == null ? Map.of() : before.overrides(), source(), http);
+        Json.write(state.resolve("installed.json"), new Installed(List.copyOf(files), overrides));
         Json.write(state.resolve("options.json"), new Options(List.copyOf(chosen)));
         pack.manifest().write(state);
         lock.write(state);

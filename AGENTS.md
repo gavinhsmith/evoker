@@ -29,6 +29,7 @@ evoker is a Java 21 CLI package manager for Minecraft. A pack is `evoker.json` (
 - `Pack`: fetching a published pack (URL or local folder) for servers and clients
 - `ServerFolder`: `install server`, `server update` / `start` / `command`, and the `.evoker/` state of a server folder
 - `PrismInstance`: `install <pack>` as a Prism Launcher instance, client content, optional choices (`client options`), and `client update` (Prism's pre-launch hook)
+- `Overrides`: a pack's override folders (configs): scanning them into the lock, installing them without overwriting files someone changed
 - `Dialogs`: the Swing windows shown when Prism runs evoker before a launch (no console there): optional choices and update messages
 - `Installer`: file placement, lock-hash checks, `server.properties` / `eula.txt`
 - `Config`: `evoker config`, evoker's own settings (a server's `.evoker/config.json`, or the user's)

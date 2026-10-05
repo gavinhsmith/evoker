@@ -8,13 +8,26 @@ import java.util.TreeMap;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 
-/** evoker.lock: exactly which files a pack resolves to. Written only by evoker. */
-record Lock(int lockVersion, Game game, Server server, Map<String, Entry> content) {
+/**
+ * evoker.lock: exactly which files a pack resolves to. Written only by evoker. overrides are the pack's override
+ * files, pack path (e.g. "overrides/config/a.toml") → sha256.
+ */
+record Lock(int lockVersion, Game game, Server server, Map<String, Entry> content, Map<String, String> overrides) {
     static final String FILE = "evoker.lock";
     static final int VERSION = 2;
 
     Lock {
         content = content == null ? new TreeMap<>() : new TreeMap<>(content);
+        overrides = overrides == null || overrides.isEmpty() ? null : new TreeMap<>(overrides);
+    }
+
+    Lock(int lockVersion, Game game, Server server, Map<String, Entry> content) {
+        this(lockVersion, game, server, content, null);
+    }
+
+    /** The override files; never null. */
+    Map<String, String> overrideFiles() {
+        return overrides == null ? Map.of() : overrides;
     }
 
     static Lock empty() {
