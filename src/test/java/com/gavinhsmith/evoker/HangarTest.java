@@ -13,7 +13,7 @@ class HangarTest {
     final FakeApi api = new FakeApi();
     final Hangar hangar = new Hangar(new Http(), api.apis().hangar());
 
-    static final Manifest.ServerSpec PAPER = new Manifest.ServerSpec("paper", "1.21.4", null);
+    static final Manifest.Game PAPER = new Manifest.Game("1.21.4", "paper", null);
     static final String VERSIONS = "/hangar/api/v1/projects/ViaVersion/versions?limit=1&platform=PAPER&platformVersion=1.21.4";
     static final String RELEASES = VERSIONS + "&channel=Release";
 
@@ -22,8 +22,8 @@ class HangarTest {
         api.close();
     }
 
-    private Source.Resolution resolve(String ref, String version, Manifest.ServerSpec server) {
-        return hangar.resolve(ref, new Manifest.Content(version, null, null), null, server);
+    private Source.Resolution resolve(String ref, String version, Manifest.Game game) {
+        return hangar.resolve(ref, Manifest.Content.of(version), null, game);
     }
 
     private void via() {
@@ -37,10 +37,8 @@ class HangarTest {
         String err = Output.err(() -> {
             Source.Resolution r = resolve("ViaVersion", "latest", PAPER);
             assertEquals("ViaVersion", r.slug());
-            assertEquals(new Lock.Entry("plugin", "31", "500", "5.0.3", api.base + "/files/via.jar", null, null, null),
-                    r.entry());
-            assertEquals("SHA-256", r.algo());
-            assertEquals("abc", r.hash());
+            assertEquals(new Lock.Entry("plugin", List.of("server"), null, "ViaVersion", null, "31", "500", "5.0.3",
+                    api.base + "/files/via.jar", "sha256:abc", null, null), r.entry());
             assertEquals(List.of(new Source.Dependency("12", null, false)), r.dependencies());
         });
         assertTrue(err.contains("ProtocolLib from outside Hangar"), err);
@@ -53,7 +51,7 @@ class HangarTest {
                         "hangar-versions-backwards.json");
         Source.Resolution r = resolve("12", "latest", PAPER);
         assertEquals(api.base + "/files/backwards.jar", r.entry().url());
-        assertNull(r.algo());
+        assertNull(r.entry().hash());
     }
 
     @Test
@@ -71,7 +69,7 @@ class HangarTest {
     @Test
     void onlyOnPaperAndPurpur() {
         var e = assertThrows(EvokerException.class,
-                () -> resolve("ViaVersion", "latest", new Manifest.ServerSpec("fabric", "1.21.4", null)));
+                () -> resolve("ViaVersion", "latest", new Manifest.Game("1.21.4", "fabric", null)));
         assertTrue(e.getMessage().contains("need paper or purpur"), e.getMessage());
     }
 

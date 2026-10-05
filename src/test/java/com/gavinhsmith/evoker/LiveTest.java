@@ -16,10 +16,10 @@ class LiveTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"vanilla", "paper", "purpur", "fabric", "quilt", "neoforge", "spigot"})
-    void resolvesServerSoftware(String software) {
-        var resolved = server.resolve(new Manifest.ServerSpec(software, "1.21.4", "latest"));
+    void resolvesEveryLoader(String loader) {
+        var resolved = server.resolve(new Manifest.Game("1.21.4", loader, null));
         assertTrue(resolved.url().startsWith("https://"), resolved.url());
-        if (!software.equals("vanilla")) assertNotNull(resolved.build());
+        if (!loader.equals("vanilla")) assertNotNull(resolved.build());
     }
 
     final Modrinth modrinth = new Modrinth(new Http(), Apis.DEFAULT.modrinth());
@@ -27,7 +27,7 @@ class LiveTest {
     @Test
     void modrinthModWithRequiredDependency() {
         // Mod Menu requires Fabric API (P7dR8mSH)
-        var r = modrinth.resolve("modmenu", new Manifest.Content("latest", null, null), null, new Manifest.ServerSpec("fabric", "1.21.4", null));
+        var r = modrinth.resolve("modmenu", Manifest.Content.of("latest"), null, new Manifest.Game("1.21.4", "fabric", null));
         assertEquals("mod", r.entry().type());
         assertTrue(r.dependencies().contains(new Source.Dependency("P7dR8mSH", null, false)), r.dependencies().toString());
     }
@@ -35,15 +35,15 @@ class LiveTest {
     @Test
     void hangarPlugin() {
         var r = new Hangar(new Http(), Apis.DEFAULT.hangar()).resolve("ViaVersion",
-                new Manifest.Content("latest", null, null), null, new Manifest.ServerSpec("paper", "1.21.4", null));
+                Manifest.Content.of("latest"), null, new Manifest.Game("1.21.4", "paper", null));
         assertEquals("plugin", r.entry().type());
         assertTrue(r.entry().url().startsWith("https://"), r.entry().url());
     }
 
     @Test
     void modrinthPluginAndResourcePack() {
-        var paper = new Manifest.ServerSpec("paper", "1.21.4", null);
-        assertEquals("plugin", modrinth.resolve("luckperms", new Manifest.Content("latest", null, null), null, paper).entry().type());
-        assertEquals("resourcepack", modrinth.resolve("faithful-32x", new Manifest.Content("latest", null, null), null, paper).entry().type());
+        var paper = new Manifest.Game("1.21.4", "paper", null);
+        assertEquals("plugin", modrinth.resolve("luckperms", Manifest.Content.of("latest"), null, paper).entry().type());
+        assertEquals("resourcepack", modrinth.resolve("faithful-32x", Manifest.Content.of("latest"), null, paper).entry().type());
     }
 }

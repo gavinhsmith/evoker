@@ -84,6 +84,11 @@ final class Http {
         }
     }
 
+    /** A hash as evoker.lock stores it, e.g. "sha256:ab12..."; null when algo is null. */
+    static String hash(String algo, String hex) {
+        return algo == null ? null : algo.toLowerCase(java.util.Locale.ROOT).replace("-", "") + ":" + hex;
+    }
+
     static String enc(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }

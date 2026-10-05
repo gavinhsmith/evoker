@@ -2,6 +2,7 @@ package com.gavinhsmith.evoker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -13,11 +14,15 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 
 class ResolverTest {
-    /** Projects whose slug is their id; versions are listed oldest first, "latest" is the last one. */
+    /**
+     * Projects whose slug is their id; versions are listed oldest first, "latest" is the last one.
+     * Projects run on both sides unless {@link #runsOn} says otherwise.
+     */
     static final class FakeSource implements Source {
         record V(String id, String project, String version, List<Dependency> deps) {}
 
         final Map<String, List<V>> projects = new LinkedHashMap<>();
+        final Map<String, List<String>> sides = new LinkedHashMap<>();
         final List<String> calls = new ArrayList<>();
 
         FakeSource version(String project, String version, Dependency... deps) {
@@ -26,8 +31,13 @@ class ResolverTest {
             return this;
         }
 
+        FakeSource runsOn(String project, String... sides) {
+            this.sides.put(project, List.of(sides));
+            return this;
+        }
+
         @Override
-        public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.ServerSpec server) {
+        public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.Game game) {
             String version = wanted.version();
             calls.add(ref);
             List<V> versions = projects.get(ref);
@@ -36,8 +46,9 @@ class ResolverTest {
             for (V candidate : versions) {
                 if (candidate.id().equals(exactVersionId) || candidate.version().equals(version)) v = candidate;
             }
-            var entry = new Lock.Entry("mod", v.project(), v.id(), v.version(), "https://x/" + v.id(), null, null, null);
-            return new Resolution(ref, entry, v.version(), v.deps(), null, null);
+            var entry = new Lock.Entry("mod", sides.getOrDefault(ref, List.of("client", "server")), null, "Title " + ref,
+                    null, v.project(), v.id(), v.version(), "https://x/" + v.id(), "sha512:" + v.id(), null, null);
+            return new Resolution(ref, entry, v.version(), v.deps());
         }
     }
 
@@ -53,17 +64,19 @@ class ResolverTest {
     final Resolver resolver = new Resolver(Map.of("modrinth", source));
 
     private static Manifest manifest(String... keyVersion) {
+        return pack("both", keyVersion);
+    }
+
+    private static Manifest pack(String side, String... keyVersion) {
         var content = new LinkedHashMap<String, Manifest.Content>();
         for (int i = 0; i < keyVersion.length; i += 2) {
-            content.put("modrinth:" + keyVersion[i], new Manifest.Content(keyVersion[i + 1], null, null));
+            content.put("modrinth:" + keyVersion[i], Manifest.Content.of(keyVersion[i + 1]));
         }
-        return new Manifest(new Manifest.ServerSpec("fabric", "1.21.4", null), false, null, content, null);
+        return new Manifest("test", side, new Manifest.Game("1.21.4", "fabric", null), content);
     }
 
     private Map<String, Lock.Entry> resolve(Manifest m, Map<String, Lock.Entry> locked, Predicate<String> refresh) {
-        var out = new LinkedHashMap<String, Lock.Entry>();
-        resolver.resolve(m, locked, refresh).forEach((k, r) -> out.put(k, r.entry()));
-        return out;
+        return resolver.resolve(m, locked, refresh);
     }
 
     private Map<String, Lock.Entry> resolve(Manifest m) {
@@ -186,7 +199,83 @@ class ResolverTest {
         assertEquals(List.of("modrinth:b"), kept.get("modrinth:c").requiredBy());
     }
 
+    @Test
+    void sidesAreLimitedToThePack() {
+        source.version("a", "1").version("sodium", "1").runsOn("sodium", "client");
+
+        assertEquals(List.of("server"), resolve(pack("server", "a", "latest")).get("modrinth:a").sides());
+        var e = assertThrows(EvokerException.class, () -> resolve(pack("server", "sodium", "latest")));
+        assertTrue(e.getMessage().contains("modrinth:sodium runs only on the client, and this is a server pack"),
+                e.getMessage());
+    }
+
+    @Test
+    void anExplicitSideOverridesWhereItRuns() {
+        source.version("a", "1");
+        Manifest m = manifest();
+        m.content().put("modrinth:a", new Manifest.Content("latest", "server", null, null, null));
+
+        assertEquals(List.of("server"), resolve(m).get("modrinth:a").sides());
+    }
+
+    @Test
+    void dependenciesGoWhereTheEntriesThatNeedThemGo() {
+        source.version("iris", "1", dep("lib")).runsOn("iris", "client")
+                .version("lithium", "1", dep("lib2")).runsOn("lithium", "server")
+                .version("lib", "1").version("lib2", "1", dep("lib")).runsOn("lib2", "server");
+
+        var entries = resolve(manifest("iris", "latest", "lithium", "latest"));
+
+        assertEquals(List.of("client", "server"), entries.get("modrinth:lib").sides(), "needed by both, through lib2");
+        assertEquals(List.of("server"), entries.get("modrinth:lib2").sides());
+    }
+
+    @Test
+    void aDependencyDoesNotGoWhereItCannotRun() {
+        source.version("a", "1", dep("clientlib")).version("clientlib", "1").runsOn("clientlib", "client");
+
+        assertEquals(List.of("client"), resolve(manifest("a", "latest")).get("modrinth:clientlib").sides());
+    }
+
+    @Test
+    void removingAnEntryShrinksItsDependenciesSides() {
+        source.version("iris", "1", dep("lib")).runsOn("iris", "client")
+                .version("lithium", "1", dep("lib")).runsOn("lithium", "server").version("lib", "1");
+        Map<String, Lock.Entry> locked = resolve(manifest("iris", "latest", "lithium", "latest"));
+
+        var kept = Resolver.finish(Resolver.prune(locked, Set.of("modrinth:lithium")), manifest("lithium", "latest"));
+
+        assertEquals(List.of("server"), kept.get("modrinth:lib").sides());
+    }
+
+    @Test
+    void optionalEntriesKeepTheirTitle() {
+        source.version("a", "1", dep("b")).version("b", "1");
+        Manifest m = manifest();
+        m.content().put("modrinth:a", new Manifest.Content("latest", null, true, null, null));
+
+        var entries = resolve(m);
+
+        assertEquals(Boolean.TRUE, entries.get("modrinth:a").optional());
+        assertEquals("Title a", entries.get("modrinth:a").title());
+        assertNull(entries.get("modrinth:b").optional());
+        assertNull(entries.get("modrinth:b").title());
+    }
+
+    @Test
+    void satisfiesNoticesChangedSettings() {
+        source.version("a", "1");
+        Manifest m = manifest("a", "latest");
+        Lock.Entry locked = resolve(m).get("modrinth:a");
+
+        assertTrue(Resolver.satisfies(locked, Manifest.Content.of("latest"), m));
+        assertTrue(!Resolver.satisfies(locked, new Manifest.Content("latest", "client", null, null, null), m));
+        assertTrue(!Resolver.satisfies(locked, new Manifest.Content("latest", null, true, null, null), m));
+        assertTrue(!Resolver.satisfies(locked, new Manifest.Content("latest", null, null, "datapack", null), m));
+    }
+
     private static Lock.Entry entry(String... requiredBy) {
-        return new Lock.Entry("mod", "p", "v", "1", "u", null, null, requiredBy.length == 0 ? null : List.of(requiredBy));
+        return new Lock.Entry("mod", List.of("server"), null, null, null, "p", "v", "1", "u", null, null,
+                requiredBy.length == 0 ? null : List.of(requiredBy));
     }
 }

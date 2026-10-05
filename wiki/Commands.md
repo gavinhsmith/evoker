@@ -10,18 +10,18 @@ Pack commands only change `evoker.json` and `evoker.lock`. They resolve versions
 
 | Command | What it does |
 |---|---|
-| `create <name> <loader> [game_version] [client\|server\|both] [--git]` | Writes a new `evoker.json` (and an empty `evoker.lock`) in the current folder. Refuses if one exists. `game_version` defaults to the newest release. The side defaults to `server` for `paper`, `purpur` and `spigot`, and `both` otherwise. `--git` also runs `git init`. |
+| `create <name> <loader> [game_version] [client\|server\|both] [--git]` | Writes a new `evoker.json` and `evoker.lock` (with the game's exact loader build) in the current folder. Refuses if one exists. `game_version` defaults to the newest release. The side defaults to `server` for `paper`, `purpur` and `spigot`, and `both` otherwise. `--git` also runs `git init`. |
 | `add <source:name>[@version] [--type <type>] [--side <side>] [--optional]` | Adds content: `latest` unless a version is given, which pins it. `sodium` means `modrinth:sodium`. `--type` only when the project is published as more than one type; `--side` only to override the [inferred side](Content-Sources#sides). `--optional` lets players choose. Adding an existing entry replaces its settings. |
-| `url <name> <url> <type> [--side <side>] [--optional]` | Adds a file from a URL as `url:<name>`. `--side` is required unless the type implies it (`plugin`, `datapack`: server; `shaderpack`: client). See [Content Sources](Content-Sources#url). |
+| `url <name> <url> <type> [--side <side>] [--optional]` | Adds a file from a URL as `url:<name>` (the name: letters, digits, `.`, `_`, `-`). `--side` is required unless the type implies it (`plugin`, `datapack`: server; `shaderpack`: client). See [Content Sources](Content-Sources#url). |
 | `remove <name>` | Removes the entry, and every dependency nothing else needs anymore. |
 | `list [type] [--output=text\|json]` | Lists the game, loader and content (or one type of content): locked version, `latest` / `pinned`, side, `optional`, and what each dependency is required by. See [list --output=json](#list---outputjson). |
 | `update [name]` | Moves `latest` entries (and the build, if `latest`) to their newest versions for the current game version. Pinned entries stay. With a name, updates only that entry, moving its pin if it has one. Re-downloads `url` entries to accept changed files. |
 | `update list [--output=text\|json]` | Prints what `update` would change (`name: old -> new`), changing nothing. |
 | `upgrade [game_version]` | Moves the pack to `game_version` (default: the newest release) and everything to its newest version for it. If there are pinned entries, asks whether to upgrade them too (`--pinned` / `--keep-pinned` answer without asking). |
-| `upgrade list [game_version] [--output=text\|json]` | Prints what `upgrade` would change, changing nothing. Pinned entries are listed and marked. |
+| `upgrade list [game_version] [--output=text\|json]` | Prints what `upgrade` would change, changing nothing. Pinned entries are included as if upgraded, and marked; with `--keep-pinned` they show as `kept`. |
 | `import <pack.mrpack \| url \| modrinth-slug>` | Writes a new pack from a Modrinth modpack. See [Content Sources](Content-Sources#modpacks-mrpack). |
 
-Errors print `error: ...` and exit with code 1; a failed command leaves `evoker.json` and `evoker.lock` unchanged. Warnings print `evoker: warning: ...` and never stop the command.
+`--output=json` works only with `list`, `update list` and `upgrade list`. Errors print `error: ...` and exit with code 1; a failed command leaves `evoker.json` and `evoker.lock` unchanged. Warnings print `evoker: warning: ...` and never stop the command.
 
 ### Upgrades never fail on content
 
@@ -105,6 +105,6 @@ Only the JSON goes to stdout. Content is a flat list sorted by `key`; every fiel
 | Field | Meaning |
 |---|---|
 | `game` | `null` when the game version and build don't change. |
-| `content` | Only entries that change, plus (for `upgrade list`) pinned entries, sorted by `key`. `change` is `added`, `removed`, `updated`, or `kept` (pinned and not upgraded, or no compatible version: also a warning on stderr). `from` / `to` are versions, `null` where there is none. |
+| `content` | Only entries that change, sorted by `key`. `change` is `added`, `removed`, `updated`, or `kept` (a pinned entry `upgrade list --keep-pinned` leaves alone). `from` / `to` are versions, `null` where there is none. An entry with no compatible version keeps its version and isn't listed; it's a warning on stderr. |
 
 `server update list` prints the same shape, with `pinned` always `null`.

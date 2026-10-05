@@ -32,7 +32,7 @@ In an empty folder:
 evoker create "My Pack" fabric 1.21.4 --git
 ```
 
-This writes [`evoker.json`](evoker-json) and an empty [`evoker.lock`](evoker-lock). The side (`client`, `server` or `both`) defaults to `both` for mod loaders and `server` for Paper, Purpur and Spigot; give it after the game version to choose. `--git` also runs `git init`. Add an `icon.png` if you like.
+This writes [`evoker.json`](evoker-json) and [`evoker.lock`](evoker-lock). The side (`client`, `server` or `both`) defaults to `both` for mod loaders and `server` for Paper, Purpur and Spigot; give it after the game version to choose. `--git` also runs `git init`. Add an `icon.png` if you like.
 
 Add content:
 
