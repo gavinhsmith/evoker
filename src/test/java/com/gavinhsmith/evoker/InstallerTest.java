@@ -109,7 +109,9 @@ class InstallerTest {
     @Test
     void acceptEulaWritesEulaTxt() throws IOException {
         installer().acceptEula();
-        assertTrue(Files.readString(dir.resolve("eula.txt")).contains("eula=true"));
+        String eula = Files.readString(dir.resolve("eula.txt"));
+        assertTrue(eula.contains("eula=true"));
+        assertTrue(eula.contains("remain responsible"));
     }
 
     private Properties load() throws IOException {

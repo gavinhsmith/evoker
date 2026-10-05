@@ -29,7 +29,7 @@ Changing any of these makes the next `install`/`start` download the matching ser
 
 ## `eula`
 
-`true` writes `eula=true` to `eula.txt`, meaning you accept the [Minecraft EULA](https://aka.ms/MinecraftEULA). Default `false` (evoker leaves `eula.txt` alone).
+`true` writes `eula=true` to `eula.txt`, meaning you accept the [Minecraft EULA](https://aka.ms/MinecraftEULA). The file also notes that you, not evoker, remain responsible for following the EULA and the [Minecraft Usage Guidelines](https://www.minecraft.net/en-us/usage-guidelines). Default `false` (evoker leaves `eula.txt` alone).
 
 ## `properties`
 

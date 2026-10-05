@@ -122,7 +122,12 @@ final class Installer {
         Path file = dir.resolve("eula.txt");
         try {
             if (Files.exists(file) && Files.readString(file).contains("eula=true")) return;
-            Files.writeString(file, "# Accepted via \"eula\": true in evoker.json (https://aka.ms/MinecraftEULA)\neula=true\n");
+            Files.writeString(file, """
+                    # Accepted via "eula": true in evoker.json (https://aka.ms/MinecraftEULA)
+                    # evoker only writes this file. You, the server owner, remain responsible for following the
+                    # Minecraft EULA and the Minecraft Usage Guidelines (https://www.minecraft.net/en-us/usage-guidelines).
+                    eula=true
+                    """);
         } catch (IOException e) {
             throw new EvokerException("cannot write " + file + ": " + e.getMessage(), e);
         }
