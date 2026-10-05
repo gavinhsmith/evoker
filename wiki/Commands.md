@@ -13,6 +13,7 @@ Run every command inside the server folder: `evoker <command>` (or `java -jar ev
 | `update [slug]` | Moves `latest` entries to their newest compatible versions, and the server to its newest build if `build` is `latest`. Pinned entries stay. With a slug, updates only that entry (and not the server). Prints what changed. |
 | `upgrade [--dry-run]` | Moves **everything** (pinned entries and a pinned server `build` included) to the newest versions for the current game version, and rewrites the pins in `evoker.json`. `--dry-run` prints the changes without touching anything. |
 | `start` | `install` (plus the auto-updates enabled in the `evoker` block), then runs the server as a child process. The console is passed through; evoker exits with the server's exit code. |
+| `list [--output=text\|json]` | Shows the server and every content entry: locked version, whether it is `latest`, `pinned`, a dependency (and of what) or a URL file, and entries in `evoker.json` that aren't installed yet. Offline. `--output=json` is for other tools; see [list --output=json](#list---outputjson). |
 | `command` | Prints the command `start` would run, on one line, for what is in `evoker.lock` (arguments containing spaces are double-quoted). Offline. Errors if nothing is installed yet. See [Running the server yourself](#running-the-server-yourself). |
 | `version` | Prints the evoker version. |
 | `help` | Prints the command list. |
@@ -52,3 +53,28 @@ evoker install && eval "exec $(evoker command)"
 ```
 
 Ask evoker each time rather than copying the line once: for NeoForge it contains the build number, which changes on `update` / `upgrade`. Unlike `start`, this skips the auto-updates in the `evoker` block.
+
+## list --output=json
+
+Only the JSON goes to stdout. Content is a flat list sorted by `key`; every field is always present (`null` when it doesn't apply).
+
+```json
+{
+  "format": 1,
+  "server": { "software": "fabric", "version": "1.21.4", "build": "0.19.5", "pinned": false, "installed": true },
+  "content": [
+    { "key": "modrinth:fabric-api", "type": "mod", "projectId": "P7dR8mSH", "version": "0.110.0",
+      "pinned": null, "requiredBy": ["modrinth:sodium"], "installed": true }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `format` | Version of this output. Changes only when fields are removed or change meaning. |
+| `server.build` | The locked build, or the build asked for in `evoker.json` (e.g. `latest`) if nothing is installed. |
+| `server.pinned` | `build` in `evoker.json` is something other than `latest`. |
+| `key`, `type`, `projectId`, `version` | As in [evoker.lock](evoker-lock). For an entry that isn't installed, `version` is what `evoker.json` asks for, and `type` / `projectId` are `null` (except URL entries, which declare `type`). URL entries have no `version`. |
+| `pinned` | `true` / `false` for entries in `evoker.json`; `null` for dependencies and URL entries. |
+| `requiredBy` | Keys of the entries that need this one. Empty for entries only you asked for. |
+| `installed` | `false` when the entry is in `evoker.json` but not in the lock yet (run `evoker install`). |

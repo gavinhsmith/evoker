@@ -103,6 +103,7 @@ evoker import cobblemon-fabric
 | `evoker update [slug]` | Move `latest` entries to their newest versions |
 | `evoker upgrade [--dry-run]` | Move everything, pins included, to the newest versions for the game version |
 | `evoker start` | Install, then run the server |
+| `evoker list [--output=json]` | Show what's installed: versions, pins, dependencies |
 | `evoker command` | Print the launch command, for systemd, Docker or a panel |
 
 Full reference: [Commands](https://github.com/gavinhsmith/evoker/wiki/Commands) · [evoker.json](https://github.com/gavinhsmith/evoker/wiki/evoker-json) · [evoker.lock](https://github.com/gavinhsmith/evoker/wiki/evoker-lock) · [Server Software](https://github.com/gavinhsmith/evoker/wiki/Server-Software) · [Content Sources](https://github.com/gavinhsmith/evoker/wiki/Content-Sources)

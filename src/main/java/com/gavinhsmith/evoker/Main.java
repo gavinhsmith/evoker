@@ -1,5 +1,6 @@
 package com.gavinhsmith.evoker;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -36,6 +37,8 @@ public final class Main {
               update [slug]          move "latest" entries (and the server build) to their newest versions
               upgrade [--dry-run]    move everything, pins included, to the newest versions for this game version
               start                  install, then run the server
+              list [--output=text|json]
+                                     show the server and content: versions, pins, dependencies
               command                print the command that starts the server (for systemd, Docker, panels)
               version                print the evoker version
             """;
@@ -82,6 +85,7 @@ public final class Main {
                 case "start" -> {
                     return main.start();
                 }
+                case "list" -> System.out.println(main.list(rest));
                 case "command" -> System.out.println(main.command());
                 case "version", "--version" -> System.out.println("evoker " + VERSION);
                 case "help", "-h", "--help" -> System.out.print(USAGE);
@@ -541,6 +545,70 @@ public final class Main {
         }
         Lock.Entry pack = packs.get(0).getValue().entry();
         return Map.of("resource-pack", pack.url(), "resource-pack-sha1", Objects.requireNonNullElse(pack.sha1(), ""));
+    }
+
+    /** One row of evoker list; also its JSON shape. pinned is null for dependencies and URL entries. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    record Listed(String key, String type, String projectId, String version, Boolean pinned, List<String> requiredBy,
+                  boolean installed) {}
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    record ListedServer(String software, String version, String build, boolean pinned, boolean installed) {}
+
+    /** list [--output=text|json]: what evoker.json asks for and evoker.lock has, offline. */
+    String list(List<String> args) {
+        String output = "text";
+        for (String a : args) {
+            if (!a.startsWith("--output=")) throw new EvokerException("usage: evoker list [--output=text|json]");
+            output = a.substring("--output=".length());
+        }
+        if (!output.equals("text") && !output.equals("json")) throw new EvokerException("--output must be text or json");
+        Manifest manifest = Manifest.read(dir);
+        Lock lock = Lock.read(dir);
+        Manifest.ServerSpec spec = manifest.server();
+        Lock.Locked locked = lock.server();
+        var server = new ListedServer(spec.software(), spec.version(), locked == null ? spec.build() : locked.build(),
+                !spec.build().equals("latest"), locked != null);
+        var rows = new ArrayList<Listed>();
+        var keys = new TreeSet<>(manifest.content().keySet());
+        keys.addAll(lock.content().keySet());
+        for (String key : keys) {
+            Manifest.Content wanted = manifest.content().get(key);
+            Lock.Entry entry = lock.content().get(key);
+            Boolean pinned = wanted == null || wanted.url() != null ? null : !wanted.version().equals("latest");
+            List<String> requiredBy = entry == null || entry.requiredBy() == null ? List.of() : entry.requiredBy();
+            rows.add(entry == null
+                    ? new Listed(key, wanted.type(), null, wanted.version(), pinned, requiredBy, false)
+                    : new Listed(key, entry.type(), entry.projectId(), entry.version(), pinned, requiredBy, true));
+        }
+        if (output.equals("json")) {
+            var json = new LinkedHashMap<String, Object>();
+            json.put("format", 1);
+            json.put("server", server);
+            json.put("content", rows);
+            return Json.MAPPER.writeValueAsString(json);
+        }
+        var out = new StringBuilder(server.software() + " " + server.version() + " build " + server.build()
+                + (server.pinned() ? " (pinned)" : " (latest)") + (server.installed() ? "" : ", not installed") + "\n");
+        int keyWidth = rows.stream().mapToInt(r -> r.key().length()).max().orElse(0);
+        int versionWidth = rows.stream().mapToInt(r -> Objects.requireNonNullElse(r.version(), "-").length()).max().orElse(0);
+        var groups = new LinkedHashMap<String, List<Listed>>();
+        for (String type : UrlSource.TYPES) groups.put(type + "s", new ArrayList<>());
+        groups.put("not installed", new ArrayList<>());
+        for (Listed r : rows) groups.get(r.type() == null ? "not installed" : r.type() + "s").add(r);
+        groups.forEach((group, members) -> {
+            if (members.isEmpty()) return;
+            out.append("\n").append(group).append("\n");
+            for (Listed r : members) {
+                String status = !r.installed() ? "not installed"
+                        : r.pinned() != null ? (r.pinned() ? "pinned" : "latest")
+                        : !r.requiredBy().isEmpty() ? "dependency of " + String.join(", ", r.requiredBy())
+                        : "url";
+                out.append(String.format("  %-" + keyWidth + "s  %-" + versionWidth + "s  %s%n",
+                        r.key(), Objects.requireNonNullElse(r.version(), "-"), status));
+            }
+        });
+        return out.toString().stripTrailing();
     }
 
     /** The launch command for what is locked, one line, offline; arguments with spaces are double-quoted. */

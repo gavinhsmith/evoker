@@ -1,6 +1,7 @@
 package com.gavinhsmith.evoker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -66,6 +67,77 @@ class MainTest {
         String out = Output.out(() -> assertEquals(0, run("command")));
 
         assertTrue(out.strip().endsWith(" -Xmx64M \"-Dx=a b\" -jar server.jar nogui"), out);
+    }
+
+    private void listProject() throws IOException {
+        Files.writeString(dir.resolve(Manifest.FILE), """
+                {
+                  "server": { "software": "fabric", "version": "1.21.4" },
+                  "content": {
+                    "sodium": "latest",
+                    "lithium": "0.14.3",
+                    "ferrite-core": "latest",
+                    "url:terralith": { "url": "https://example.com/terralith.zip", "type": "datapack" }
+                  }
+                }
+                """);
+        Files.writeString(dir.resolve(Lock.FILE), """
+                {
+                  "lockVersion": 1,
+                  "server": { "software": "fabric", "version": "1.21.4", "build": "0.19.5" },
+                  "content": {
+                    "modrinth:sodium": { "type": "mod", "projectId": "AANobbMI", "version": "0.6.5" },
+                    "modrinth:lithium": { "type": "mod", "projectId": "gvQqBUqZ", "version": "0.14.3" },
+                    "modrinth:fabric-api": { "type": "mod", "projectId": "P7dR8mSH", "version": "0.110.0",
+                                             "requiredBy": ["modrinth:sodium"] },
+                    "url:terralith": { "type": "datapack", "projectId": "terralith" }
+                  }
+                }
+                """);
+    }
+
+    @Test
+    void listPrintsServerAndContentGroupedByType() throws IOException {
+        listProject();
+        String out = Output.out(() -> assertEquals(0, run("list")));
+
+        assertEquals("""
+                fabric 1.21.4 build 0.19.5 (latest)
+
+                mods
+                  modrinth:fabric-api    0.110.0  dependency of modrinth:sodium
+                  modrinth:lithium       0.14.3   pinned
+                  modrinth:sodium        0.6.5    latest
+
+                datapacks
+                  url:terralith          -        url
+
+                not installed
+                  modrinth:ferrite-core  latest   not installed
+                """, out.replace("\r\n", "\n"));
+    }
+
+    @Test
+    void listAsJson() throws IOException {
+        listProject();
+        String out = Output.out(() -> assertEquals(0, run("list", "--output=json")));
+
+        var json = Json.MAPPER.readTree(out);
+        assertEquals(1, json.path("format").asInt());
+        assertEquals("0.19.5", json.path("server").path("build").asString());
+        assertFalse(json.path("server").path("pinned").asBoolean());
+        var content = json.path("content");
+        assertEquals(5, content.size());
+        var fabricApi = content.get(0);
+        assertEquals("modrinth:fabric-api", fabricApi.path("key").asString());
+        assertTrue(fabricApi.path("pinned").isNull());
+        assertEquals("modrinth:sodium", fabricApi.path("requiredBy").get(0).asString());
+        var ferrite = content.get(1);
+        assertEquals("modrinth:ferrite-core", ferrite.path("key").asString());
+        assertFalse(ferrite.path("installed").asBoolean());
+        assertTrue(ferrite.path("type").isNull());
+        assertTrue(content.get(2).path("pinned").asBoolean());
+        assertEquals(1, run("list", "--output=yaml"));
     }
 
     @Test
