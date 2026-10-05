@@ -6,15 +6,15 @@ Prism is the only launcher supported for now.
 
 ## Setup
 
-Install evoker (see [Getting Started](Getting-Started#1-install)) and Prism Launcher. evoker finds Prism's instance folder in its usual place:
+Install evoker (see [Getting Started](Getting-Started#1-install)) and Prism Launcher. evoker finds Prism's data folder in its usual place, and reads Prism's own settings (`prismlauncher.cfg`: `InstanceDir`, `IconsDir`) for where instances and icons go:
 
-| OS | Instance folder |
+| OS | Prism data folder |
 |---|---|
-| Windows | `%APPDATA%\PrismLauncher\instances` |
-| macOS | `~/Library/Application Support/PrismLauncher/instances` |
-| Linux | `~/.local/share/PrismLauncher/instances`, or the Flatpak's `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances` |
+| Windows | `%APPDATA%\PrismLauncher` |
+| macOS | `~/Library/Application Support/PrismLauncher` |
+| Linux | `~/.local/share/PrismLauncher`, or the Flatpak's `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher` |
 
-If yours is somewhere else (portable Prism, a changed setting), tell evoker once:
+If Prism isn't there (a portable install), tell evoker where its instances are once:
 
 ```sh
 evoker config instanceDir "D:\Games\Prism\instances"
@@ -34,7 +34,7 @@ evoker install --local ./my-pack
 5. Asks about each optional entry, showing its title and description. Without a console to ask in, optional entries are left out.
 6. Sets the instance's pre-launch command to `evoker client update`.
 
-Then open Prism (or restart it, if it was running) and launch the instance.
+Then launch the instance from Prism. A running Prism picks the new instance up by itself.
 
 ## Updates on launch
 
@@ -44,7 +44,9 @@ Before every launch, Prism runs `evoker client update`:
 2. **Nothing changed:** the launch continues.
 3. **Content changed:** downloads and deletes files to match, then the launch continues with the new content.
 4. **New optional entries:** a window asks whether to install them. The answers are remembered.
-5. **The game version or loader changed:** evoker updates the instance, then **stops the launch** and shows a message, e.g. *"My Pack was updated to Minecraft 1.21.5. Press Launch again."* Prism has already read the instance's versions by the time the update runs, so the new ones only take effect on the next launch.
+5. **The game version or loader changed:** evoker updates the instance, then **stops the launch** (by exiting with an error, which Prism treats as "don't launch") and shows a message, e.g. *"My Pack was updated to Minecraft 1.21.5. Press Launch again."* Prism reads the instance's versions before it runs the pre-launch command, so the new ones only take effect on the next launch.
+
+Every update compares the instance's versions with the pack, not only what changed upstream. Prism saves its copy of `mmc-pack.json` a few seconds after loading it, so it can occasionally overwrite a version change evoker just made; the next launch then corrects it again.
 
 **Launching is never blocked by updates:** if the pack can't be fetched (offline, the URL is gone) or a file can't be downloaded, evoker warns and the game launches with what's installed. A file that doesn't match its locked hash is never installed.
 
@@ -72,12 +74,12 @@ In the instance folder:
 
 | File | |
 |---|---|
-| `instance.cfg` | Name, icon, and `PreLaunchCommand` (with `OverrideCommands=true`): `"$INST_JAVA" -jar "<path to evoker.jar>" client update "$INST_DIR"`. It runs with the instance's own Java, so nothing else is needed on `PATH`. |
-| `mmc-pack.json` | The Minecraft and loader components (`net.minecraft`, plus `net.fabricmc.fabric-loader` and `net.fabricmc.intermediary`, `org.quiltmc.quilt-loader` and `net.fabricmc.intermediary`, or `net.neoforged`). |
+| `instance.cfg` | Name, icon, and `PreLaunchCommand` (with `OverrideCommands=true`): `"$INST_JAVA" -jar "<path to evoker.jar>" client update "$INST_DIR"`. Prism fills in `$INST_JAVA` (the instance's own Java, so nothing else is needed on `PATH`) and `$INST_DIR` itself, on every OS, and runs it in the instance's `minecraft/` folder. On Windows that Java is `javaw.exe`, which has no console: questions and messages during an update need a window. |
+| `mmc-pack.json` | The Minecraft and loader components: `net.minecraft`, plus `net.fabricmc.fabric-loader`, `org.quiltmc.quilt-loader` or `net.neoforged`. Prism adds the rest (LWJGL, intermediary mappings) itself on the first launch. Later version changes edit the `version` fields in place. |
 | `minecraft/` | The game folder: `mods/`, `resourcepacks/`, `shaderpacks/`. |
 | `.evoker/` | evoker's state: `source.json` (where the pack came from), `evoker.json` / `evoker.lock` (the pack as last installed), `options.json` (your optional choices), `installed.json` (files evoker installed). |
 
-The pack icon is copied to Prism's `icons/` folder (next to `instances/`) as `evoker-<instance>.png`.
+The pack icon is copied to Prism's icons folder as `evoker-<instance>.png` (icon key `evoker-<instance>`).
 
 If evoker.jar moves (reinstalling evoker to a different folder), run `evoker client update <pack>` once to fix the pre-launch command.
 
