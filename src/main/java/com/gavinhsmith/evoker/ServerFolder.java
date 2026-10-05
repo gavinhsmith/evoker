@@ -10,30 +10,10 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 
 /** A folder a pack is installed into as a server: installing, updating and running it. evoker's state is in .evoker/. */
 final class ServerFolder {
     static final String STATE = ".evoker";
-
-    /** Where the pack comes from: a pack URL (the folder holding evoker.json) or a local pack folder. */
-    record Source(String url, String path) {
-        /** A URL ending in /evoker.json means its folder. */
-        static Source of(String url, String path) {
-            if (url != null) {
-                if (url.endsWith("/" + Manifest.FILE)) url = url.substring(0, url.length() - Manifest.FILE.length());
-                return new Source(url.endsWith("/") ? url : url + "/", null);
-            }
-            Path p = Path.of(path).toAbsolutePath().normalize();
-            if (p.getFileName() != null && p.getFileName().toString().equals(Manifest.FILE)) p = p.getParent();
-            return new Source(null, p.toString());
-        }
-
-        @Override
-        public String toString() {
-            return url != null ? url : path;
-        }
-    }
 
     /** What evoker installed: the server jar (pinned by hash) and every file it owns, relative to the folder. */
     record Installed(Lock.Server server, List<String> files) {
@@ -41,8 +21,6 @@ final class ServerFolder {
             files = files == null ? List.of() : List.copyOf(files);
         }
     }
-
-    record Pack(Manifest manifest, Lock lock) {}
 
     private final Path dir;
     private final Path state;
@@ -56,31 +34,17 @@ final class ServerFolder {
         this.installer = new Installer(dir, http);
     }
 
-    /** Fetches evoker.json and evoker.lock; a pack without a lock can't be installed. */
-    static Pack fetch(Http http, Source source) {
-        if (source.url() != null) {
-            JsonNode manifest = http.jsonOrNull(source.url() + Manifest.FILE);
-            if (manifest == null) throw new EvokerException("no " + Manifest.FILE + " at " + source.url());
-            JsonNode lock = http.jsonOrNull(source.url() + Lock.FILE);
-            if (lock == null) throw new EvokerException("the pack at " + source.url() + " has no " + Lock.FILE);
-            return new Pack(Manifest.of(manifest, source.url() + Manifest.FILE), Lock.of(lock, source.url() + Lock.FILE));
-        }
-        Path pack = Path.of(source.path());
-        if (!Files.exists(pack.resolve(Lock.FILE))) throw new EvokerException("the pack in " + pack + " has no " + Lock.FILE);
-        return new Pack(Manifest.read(pack), Lock.read(pack));
-    }
-
     /** install server: the pack's server and server-side content into this folder, then the EULA question. */
-    void install(Source source, boolean acceptEula) {
+    void install(Pack.Source source, boolean acceptEula) {
         if (Files.exists(dir.resolve(Manifest.FILE))) {
             throw new EvokerException(dir + " is a pack folder; install the server into another folder"
                     + " (evoker install server --local " + dir + ")");
         }
-        Source existing = source();
+        Pack.Source existing = source();
         if (existing != null && !existing.equals(source)) {
             throw new EvokerException("this folder already has a pack installed from " + existing);
         }
-        Pack pack = fetch(http, source);
+        Pack pack = Pack.fetch(http, source);
         if (!pack.manifest().sides().contains("server")) {
             throw new EvokerException(pack.manifest().name() + " is a client pack; it can't be installed as a server");
         }
@@ -104,10 +68,10 @@ final class ServerFolder {
      * can't be fetched, warns and keeps what is installed.
      */
     void update(boolean listOnly, String output) {
-        Source source = requireSource();
+        Pack.Source source = requireSource();
         Pack pack;
         try {
-            pack = fetch(http, source);
+            pack = Pack.fetch(http, source);
         } catch (EvokerException e) {
             Main.warn("cannot fetch the pack (" + e.getMessage() + "); keeping what is installed");
             return;
@@ -166,7 +130,7 @@ final class ServerFolder {
             Path path = installer.path(key, entry, levelName);
             if (path == null) continue;
             try {
-                installer.fetch(key + " " + Objects.requireNonNullElse(entry.version(), ""), entry.url(), path, entry.hash());
+                installer.fetch(entry.version() == null ? key : key + " " + entry.version(), entry.url(), path, entry.hash());
             } catch (EvokerException ex) {
                 Main.warn(ex.getMessage() + "; keeping what is installed");
             }
@@ -234,12 +198,12 @@ final class ServerFolder {
         return Server.command(lock.game().loader(), lock.game().build(), config.string("java"), config.strings("jvmArgs"), dir);
     }
 
-    private Source source() {
-        return read("source.json", Source.class);
+    private Pack.Source source() {
+        return read("source.json", Pack.Source.class);
     }
 
-    private Source requireSource() {
-        Source source = source();
+    private Pack.Source requireSource() {
+        Pack.Source source = source();
         if (source == null) throw new EvokerException("no pack is installed in " + dir + " (run evoker install server)");
         return source;
     }

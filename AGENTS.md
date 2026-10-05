@@ -4,7 +4,7 @@ Instructions for coding agents working on evoker.
 
 ## What this is
 
-evoker is a Java 21 CLI package manager for Minecraft. A pack is `evoker.json` (author-written: name, side, game version, loader, content) plus `evoker.lock` (tool-written: exact versions, URLs, hashes, sides). Pack commands only edit those two files; servers and Prism clients install from a published pack (the Prism client install is still being built on the `packs` branch). File formats, commands and behavior are documented in [`wiki/`](wiki/). Treat it as the spec, and update it when behavior changes.
+evoker is a Java 21 CLI package manager for Minecraft. A pack is `evoker.json` (author-written: name, side, game version, loader, content) plus `evoker.lock` (tool-written: exact versions, URLs, hashes, sides). Pack commands only edit those two files; servers and Prism clients install from a published pack (updating Prism instances before launch is still being built on the `packs` branch). File formats, commands and behavior are documented in [`wiki/`](wiki/). Treat it as the spec, and update it when behavior changes.
 
 ## Build and test
 
@@ -26,7 +26,9 @@ evoker is a Java 21 CLI package manager for Minecraft. A pack is `evoker.json` (
 - `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers; `Mrpack`: reading .mrpack files for `import`
 - `Server`: per-loader build resolution, installers (quilt, neoforge, spigot) and launch command
 - `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure, and each entry's sides
+- `Pack`: fetching a published pack (URL or local folder) for servers and clients
 - `ServerFolder`: `install server`, `server update` / `start` / `command`, and the `.evoker/` state of a server folder
+- `PrismInstance`: `install <pack>` as a Prism Launcher instance, client content, optional choices (`client options`)
 - `Installer`: file placement, lock-hash checks, `server.properties` / `eula.txt`
 - `Config`: `evoker config`, evoker's own settings (a server's `.evoker/config.json`, or the user's)
 - `install.sh` / `install.ps1` (repo root): one-command installers; CI runs both against the built jar

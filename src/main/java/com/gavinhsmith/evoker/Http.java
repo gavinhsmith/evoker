@@ -36,6 +36,14 @@ final class Http {
         return Json.MAPPER.readTree(response.body());
     }
 
+    /** The body, or null on 404. */
+    byte[] bytesOrNull(String url) {
+        HttpResponse<byte[]> response = send(url, HttpResponse.BodyHandlers.ofByteArray());
+        if (response.statusCode() == 404) return null;
+        check(url, response);
+        return response.body();
+    }
+
     /** POSTs body as JSON and parses the JSON reply. */
     JsonNode postJson(String url, Object body) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", USER_AGENT)

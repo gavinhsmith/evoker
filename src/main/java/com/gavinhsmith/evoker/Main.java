@@ -53,6 +53,11 @@ public final class Main {
               server start           update (see updateOnStart), then run the server
               server command         print the command that starts the server (for systemd, Docker, panels)
 
+            client commands:
+              install <pack-url> | --local <pack-folder>
+                                     install a pack as a new Prism Launcher instance
+              client options <pack>  choose the pack's optional content again
+
               config [setting] [value] [--user]
                                      show or change evoker's own settings (this server's, or with --user yours)
               version                print the evoker version
@@ -131,6 +136,12 @@ public final class Main {
                         case "command" -> System.out.println(folder.command().stream()
                                 .map(a -> a.matches(".*\\s.*") ? '"' + a + '"' : a).collect(Collectors.joining(" ")));
                         default -> throw new EvokerException("usage: evoker server start | update [list] | command");
+                    }
+                }
+                case "client" -> {
+                    switch (arg(rest, 0, "client options <pack>")) {
+                        case "options" -> PrismInstance.options(main.http, arg(rest, 1, "client options <pack>"));
+                        default -> throw new EvokerException("usage: evoker client options <pack>");
                     }
                 }
                 case "config" -> System.out.println(main.config(rest, flags.containsKey("--user")));
@@ -382,20 +393,24 @@ public final class Main {
         return answer != null && answer.trim().toLowerCase().startsWith("y");
     }
 
-    /** install server <pack-url> | install server --local <path> [--accept-eula] */
+    /** install [client|server] <pack-url> | --local <path> [--accept-eula]: a Prism instance, or a server here. */
     void install(List<String> positional, Map<String, String> flags) {
-        String usage = "install server <pack-url> | install server --local <pack-folder> [--accept-eula]";
-        String target = arg(positional, 0, usage);
-        if (!target.equals("server")) {
-            throw new EvokerException("installing a pack as a Prism instance isn't available yet; for a server: evoker " + usage);
-        }
-        String url = positional.size() > 1 ? positional.get(1) : null, local = flags.get("--local");
-        if ((url == null) == (local == null) || positional.size() > 2) throw new EvokerException("usage: evoker " + usage);
+        String usage = "install [server] <pack-url> | install [server] --local <pack-folder> [--accept-eula]";
+        boolean server = !positional.isEmpty() && positional.get(0).equals("server");
+        List<String> args = !positional.isEmpty() && (server || positional.get(0).equals("client"))
+                ? positional.subList(1, positional.size()) : positional;
+        String url = args.isEmpty() ? null : args.get(0), local = flags.get("--local");
+        if ((url == null) == (local == null) || args.size() > 1) throw new EvokerException("usage: evoker " + usage);
         if (url != null && !url.startsWith("https://") && !url.startsWith("http://")) {
             throw new EvokerException(url + " is not a pack URL; for a pack on disk use --local");
         }
-        new ServerFolder(dir, http).install(ServerFolder.Source.of(url, local == null ? null : dir.resolve(local).toString()),
-                flags.containsKey("--accept-eula"));
+        var source = Pack.Source.of(url, local == null ? null : dir.resolve(local).toString());
+        if (server) {
+            new ServerFolder(dir, http).install(source, flags.containsKey("--accept-eula"));
+        } else {
+            if (flags.containsKey("--accept-eula")) throw new EvokerException("--accept-eula is for servers: evoker install server");
+            PrismInstance.install(http, source);
+        }
     }
 
     /** config [setting] [value] [--user]: this server's settings in a server folder, the user's otherwise. */
