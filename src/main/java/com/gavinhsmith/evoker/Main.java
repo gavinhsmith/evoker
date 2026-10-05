@@ -42,7 +42,7 @@ public final class Main {
                                      move to a game version (default: newest) and everything to its newest version
               upgrade list [game_version] [--output=text|json]
                                      show what upgrade would change
-              import <pack>          start a pack from a Modrinth modpack (.mrpack file, URL, or modpack slug)
+              import <pack>          start a pack from a modpack: .mrpack (file, URL, Modrinth slug) or packwiz (pack.toml or its folder)
 
             server commands (in the server folder):
               install server <pack-url> | --local <pack-folder> [--accept-eula]
@@ -125,7 +125,7 @@ public final class Main {
                     List<String> versions = list ? rest.subList(1, rest.size()) : rest;
                     main.upgrade(versions.isEmpty() ? null : versions.get(0), pinned, list, output);
                 }
-                case "import" -> main.importPack(arg(rest, 0, "import <file.mrpack | url | modrinth-slug>"));
+                case "import" -> main.importPack(arg(rest, 0, "import <file.mrpack | url | modrinth-slug | pack.toml>"));
                 case "install" -> main.install(rest, flags);
                 case "server" -> {
                     var folder = new ServerFolder(dir, main.http);
@@ -436,10 +436,15 @@ public final class Main {
         return key + " = " + config.get(key);
     }
 
-    /** import <file.mrpack | url | modrinth-slug>: a Modrinth modpack becomes a new pack. */
+    /** import <file.mrpack | url | modrinth-slug | packwiz pack.toml or folder>: a modpack becomes a new pack. */
     void importPack(String ref) {
         if (Files.exists(dir.resolve(Manifest.FILE))) {
             throw new EvokerException(Manifest.FILE + " already exists in " + dir + "; import starts a new pack");
+        }
+        if (Packwiz.is(ref, dir)) {
+            Packwiz packwiz = Packwiz.of(http, ref, dir);
+            importPack(packwiz.read(), () -> packwiz.copyOverrides(dir));
+            return;
         }
         Path local = dir.resolve(ref);
         if (Files.isRegularFile(local)) {
@@ -462,9 +467,13 @@ public final class Main {
      * from the file's env: files Modrinth knows (by hash) as pinned modrinth: entries, the rest as url: entries.
      */
     private void importPack(Path zip) {
-        Mrpack pack = Mrpack.read(zip);
-        Map<String, JsonNode> byHash =
-                modrinth.versionsByHash(pack.files().stream().map(Mrpack.PackFile::sha512).toList());
+        importPack(Mrpack.read(zip), () -> Mrpack.extractOverrides(zip, dir));
+    }
+
+    /** A modpack (a .mrpack, or a packwiz pack read into the same shape) as a new pack; copyOverrides writes its configs. */
+    private void importPack(Mrpack pack, Runnable copyOverrides) {
+        Map<String, JsonNode> byHash = modrinth.versionsByHash(
+                pack.files().stream().map(Mrpack.PackFile::sha512).filter(Objects::nonNull).toList());
         Map<String, String> slugs = modrinth.slugs(
                 byHash.values().stream().map(v -> v.path("project_id").asString()).collect(Collectors.toSet()));
 
@@ -485,18 +494,21 @@ public final class Main {
                 continue;
             }
             // Only mods take their side from env; for the other types, the type decides (a shader is never server-side).
-            String side = !type.equals("mod") ? null : client && server ? "both" : client ? "client" : "server";
+            // An unknown env (packwiz's default "both") lets evoker work it out, which url entries can't.
+            boolean unknown = f.client().equals("unknown") || f.server().equals("unknown");
+            String side = !type.equals("mod") || unknown ? null : client && server ? "both" : client ? "client" : "server";
             Boolean optional = client && f.client().equals("optional");
             var v = byHash.get(f.sha512());
             if (v != null) {
                 content.put("modrinth:" + slugs.get(v.path("project_id").asString()),
                         new Manifest.Content(v.path("version_number").asString(), side, optional, type, null));
             } else {
-                content.put("url:" + fileName(f.path()), new Manifest.Content(null, side, optional, type, f.url()));
+                content.put("url:" + fileName(f.path()), new Manifest.Content(null,
+                        side == null && type.equals("mod") ? "both" : side, optional, type, f.url()));
             }
         }
         if (!skipped.isEmpty()) warn("skipping " + skipped.size() + " files evoker doesn't handle: " + skipped);
-        Mrpack.extractOverrides(zip, dir);
+        copyOverrides.run();
 
         String name = pack.name().isBlank() ? "Imported pack" : pack.name();
         Manifest manifest = new Manifest(name, "both", pack.game(), content);

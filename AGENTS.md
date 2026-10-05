@@ -23,7 +23,7 @@ evoker is a Java 21 CLI package manager for Minecraft. A pack is `evoker.json` (
 
 - `Main`: CLI entry; a `switch` on the command, no CLI library. Also the pack commands and `lock()`: resolving a pack into its lock (online only for what the lock doesn't already satisfy)
 - `Manifest`, `Lock`: `evoker.json` / `evoker.lock` records and JSON IO (`Json` holds the one mapper)
-- `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers; `Mrpack`: reading .mrpack files for `import`
+- `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers; `Mrpack` / `Packwiz`: reading .mrpack files and packwiz packs for `import`
 - `Server`: per-loader build resolution, installers (quilt, neoforge, spigot) and launch command
 - `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure, and each entry's sides
 - `Pack`: fetching a published pack (URL or local folder) for servers and clients
@@ -49,7 +49,7 @@ Tests live in `src/test/java/com/gavinhsmith/evoker/`. `FakeApi` serves fixtures
 
 ## Rules
 
-- Standard library first (`java.net.http`, `MessageDigest`, `Properties`, `ProcessBuilder`). Jackson is the only runtime dependency; ask before adding another.
+- Standard library first (`java.net.http`, `MessageDigest`, `Properties`, `ProcessBuilder`). Jackson (databind and its TOML module, for packwiz) is the only runtime dependency; ask before adding another.
 - No abstractions without a second implementation. Prefer deleting code to adding it.
 - API clients take their base URL as a constructor argument so tests can point them at a local `com.sun.net.httpserver.HttpServer`.
 - New logic needs a unit test. A new API client needs JSON fixtures in `src/test/resources/fixtures/` and an integration test. Tests that touch the real network are tagged `@Tag("live")`.

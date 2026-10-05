@@ -19,7 +19,7 @@ Pack commands only change `evoker.json` and `evoker.lock`. They resolve versions
 | `update list [--output=text\|json]` | Prints what `update` would change (`name: old -> new`), changing nothing. |
 | `upgrade [game_version]` | Moves the pack to `game_version` (default: the newest release) and everything to its newest version for it. If there are pinned entries, asks whether to upgrade them too (`--pinned` / `--keep-pinned` answer without asking). |
 | `upgrade list [game_version] [--output=text\|json]` | Prints what `upgrade` would change, changing nothing. Pinned entries are included as if upgraded, and marked; with `--keep-pinned` they show as `kept`. |
-| `import <pack.mrpack \| url \| modrinth-slug>` | Writes a new pack from a Modrinth modpack. See [Content Sources](Content-Sources#modpacks-mrpack). |
+| `import <pack.mrpack \| url \| modrinth-slug \| pack.toml>` | Writes a new pack from a Modrinth modpack or a packwiz pack. See [Content Sources](Content-Sources#modpacks-mrpack). |
 
 `--output=json` works only with `list`, `update list` and `upgrade list`. Errors print `error: ...` and exit with code 1; a failed command leaves `evoker.json` and `evoker.lock` unchanged. Warnings print `evoker: warning: ...` and never stop the command.
 

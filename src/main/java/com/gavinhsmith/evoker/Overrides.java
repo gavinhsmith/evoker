@@ -115,7 +115,7 @@ final class Overrides {
     }
 
     /** A pack path as a URL path: each segment percent-encoded (spaces as %20). */
-    private static String encode(String path) {
+    static String encode(String path) {
         try {
             return new URI(null, null, path, null).toASCIIString();
         } catch (URISyntaxException e) {

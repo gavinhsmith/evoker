@@ -12,7 +12,7 @@ import tools.jackson.databind.JsonNode;
 
 /** A Modrinth modpack (.mrpack, https://support.modrinth.com/en/articles/8802351): a zip with an index and overrides. */
 record Mrpack(String name, String version, Manifest.Game game, List<PackFile> files, int overrides) {
-    /** A file the pack downloads. client / server are its env: required, optional or unsupported. */
+    /** A file the pack downloads. client / server are its env: required, optional, unsupported, or unknown (packwiz). */
     record PackFile(String path, String sha512, String url, String client, String server) {}
 
     /** Reads modrinth.index.json, and counts the override files. */

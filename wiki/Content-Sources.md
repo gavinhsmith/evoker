@@ -139,3 +139,19 @@ evoker import https://…/MyPack.mrpack # a URL
 3. **Overrides** (`overrides/`, `client-overrides/`, `server-overrides/`: configs, mostly) are copied into the pack folder as they are. See [Overrides](Overrides).
 
 Runs in an empty folder (it refuses if `evoker.json` exists). The import is one-time: afterwards the modpack isn't tracked.
+
+## Packwiz packs
+
+`evoker import` also reads a [packwiz](https://packwiz.infra.link) pack: its `pack.toml`, at a URL or on disk, or the folder holding it.
+
+```sh
+evoker import https://raw.githubusercontent.com/me/pack/main/pack.toml
+evoker import ./my-packwiz-pack
+```
+
+1. **Pack:** `name`, the Minecraft version and the loader (`fabric`, `quilt`, `neoforge`) come from `pack.toml`; `side` is `both`. Forge packs aren't supported.
+2. **Mods, resource packs, shaders** (the `.pw.toml` metafiles) become entries, the same way as `.mrpack` files: files Modrinth recognizes by their sha512 become pinned `modrinth:` entries, others with a download URL become `url:` entries.
+   - A metafile's `side = "client"` or `"server"` is kept. `side = "both"` is packwiz's default, so it says nothing: evoker works the side out from Modrinth instead (url entries stay on both sides).
+   - `[option] optional = true` makes the entry optional.
+   - CurseForge-only files (no download URL) are skipped, with a warning.
+3. **Other files** in `index.toml` (configs, mostly) are checked against their hash and copied into the pack's `overrides/`.

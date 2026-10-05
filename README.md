@@ -35,7 +35,7 @@ Running a modded server usually means hunting down jars, matching versions by ha
 - **Optional content.** Mark something optional and players choose whether they want it.
 - **Configs that stay yours.** Packs can ship config files. Once a server owner or player changes one, evoker never overwrites it.
 - **Safe upgrades.** `evoker upgrade list 1.21.5` shows what a new game version would change. Anything without a compatible release keeps its current version instead of breaking the pack.
-- **Modpacks in one command.** `evoker import <modpack>` turns a Modrinth `.mrpack` into an evoker pack, configs included.
+- **Bring your modpack.** `evoker import` turns a Modrinth `.mrpack` or a packwiz pack into an evoker pack, configs included.
 
 ## Supported
 
@@ -102,7 +102,7 @@ and launch the new instance from Prism.
 | `evoker list [type] [--output=json]` | Show versions, pins, sides and dependencies |
 | `evoker update [name \| list]` | Move `latest` entries to their newest versions |
 | `evoker upgrade [version \| list]` | Move the pack to a new game version |
-| `evoker import <modpack>` | Start a pack from a Modrinth modpack |
+| `evoker import <modpack>` | Start a pack from a Modrinth modpack or a packwiz pack |
 
 | Server (in the server folder) | |
 |---|---|
