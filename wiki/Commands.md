@@ -1,6 +1,6 @@
 # Commands
 
-Run every command inside the server folder: `evoker <command>` (or `java -jar evoker.jar <command>` without the launcher).
+Run every command inside the server folder: `evoker <command>` (or `java -jar evoker.jar <command>` without the launcher). Options take their value either way, `--type mod` or `--type=mod`; an unknown option is an error.
 
 | Command | What it does |
 |---|---|

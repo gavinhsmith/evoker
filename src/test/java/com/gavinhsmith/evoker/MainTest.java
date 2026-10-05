@@ -69,6 +69,18 @@ class MainTest {
         assertTrue(out.strip().endsWith(" -Xmx64M \"-Dx=a b\" -jar server.jar nogui"), out);
     }
 
+    @Test
+    void flagsTakeSpaceOrEqualsValues() {
+        var positional = new java.util.ArrayList<String>();
+        var flags = Main.flags(java.util.List.of("https://x/a.jar", "--type", "mod", "--name=a=b", "--git"), positional);
+
+        assertEquals(java.util.List.of("https://x/a.jar"), positional);
+        assertEquals(java.util.Map.of("--type", "mod", "--name", "a=b", "--git", ""), flags);
+        assertEquals(1, run("upgrade", "--dryrun"));
+        assertEquals(1, run("upgrade", "--dry-run=yes"));
+        assertEquals(1, run("add", "x", "--type"));
+    }
+
     private void listProject() throws IOException {
         Files.writeString(dir.resolve(Manifest.FILE), """
                 {
@@ -120,7 +132,7 @@ class MainTest {
     @Test
     void listAsJson() throws IOException {
         listProject();
-        String out = Output.out(() -> assertEquals(0, run("list", "--output=json")));
+        String out = Output.out(() -> assertEquals(0, run("list", "--output", "json")));
 
         var json = Json.MAPPER.readTree(out);
         assertEquals(1, json.path("format").asInt());

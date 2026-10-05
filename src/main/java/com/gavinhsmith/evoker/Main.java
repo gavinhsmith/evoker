@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -72,20 +73,21 @@ public final class Main {
             return 1;
         }
         Main main = new Main(dir, apis);
-        List<String> rest = Arrays.asList(args).subList(1, args.length);
         try {
+            var rest = new ArrayList<String>();
+            Map<String, String> flags = flags(Arrays.asList(args).subList(1, args.length), rest);
             switch (args[0]) {
-                case "init" -> main.init(rest);
+                case "init" -> main.init(rest, flags.containsKey("--git"));
                 case "import" -> main.importPack(arg(rest, 0, "import <file.mrpack | url | modrinth-slug>"));
-                case "add" -> main.add(rest);
+                case "add" -> main.add(rest, flags);
                 case "remove" -> main.remove(arg(rest, 0, "remove <slug>"));
                 case "install" -> main.install(Manifest.read(dir), false, key -> false);
                 case "update" -> main.update(rest.isEmpty() ? null : rest.get(0));
-                case "upgrade" -> main.upgrade(rest.contains("--dry-run"));
+                case "upgrade" -> main.upgrade(flags.containsKey("--dry-run"));
                 case "start" -> {
                     return main.start();
                 }
-                case "list" -> System.out.println(main.list(rest));
+                case "list" -> System.out.println(main.list(flags.getOrDefault("--output", "text")));
                 case "command" -> System.out.println(main.command());
                 case "version", "--version" -> System.out.println("evoker " + VERSION);
                 case "help", "-h", "--help" -> System.out.print(USAGE);
@@ -99,6 +101,36 @@ public final class Main {
             System.err.println("error: " + e.getMessage());
             return 1;
         }
+    }
+
+    private static final Set<String> VALUE_FLAGS = Set.of("--type", "--name", "--output");
+    private static final Set<String> SWITCHES = Set.of("--git", "--dry-run");
+
+    /** Splits args into positional (added to positional) and flags: --flag value, --flag=value, or a bare switch. */
+    static Map<String, String> flags(List<String> args, List<String> positional) {
+        var flags = new HashMap<String, String>();
+        for (int i = 0; i < args.size(); i++) {
+            String a = args.get(i);
+            if (!a.startsWith("--")) {
+                positional.add(a);
+                continue;
+            }
+            int eq = a.indexOf('=');
+            String name = eq < 0 ? a : a.substring(0, eq);
+            if (SWITCHES.contains(name)) {
+                if (eq >= 0) throw new EvokerException(name + " takes no value");
+                flags.put(name, "");
+            } else if (!VALUE_FLAGS.contains(name)) {
+                throw new EvokerException("unknown option " + name);
+            } else if (eq >= 0) {
+                flags.put(name, a.substring(eq + 1));
+            } else if (i + 1 < args.size()) {
+                flags.put(name, args.get(++i));
+            } else {
+                throw new EvokerException(name + " needs a value");
+            }
+        }
+        return flags;
     }
 
     private static String arg(List<String> args, int i, String usage) {
@@ -154,9 +186,7 @@ public final class Main {
             """;
 
     /** init [software] [version] [--git] */
-    void init(List<String> args) {
-        boolean git = args.contains("--git");
-        List<String> positional = args.stream().filter(a -> !a.startsWith("--")).toList();
+    void init(List<String> positional, boolean git) {
         if (Files.exists(dir.resolve(Manifest.FILE))) {
             throw new EvokerException(Manifest.FILE + " already exists in " + dir);
         }
@@ -269,18 +299,7 @@ public final class Main {
     }
 
     /** add <slug> [version] | add <url> --type <type> [--name <name>] */
-    void add(List<String> args) {
-        var positional = new ArrayList<String>();
-        var flags = new HashMap<String, String>();
-        for (int i = 0; i < args.size(); i++) {
-            String a = args.get(i);
-            if (a.startsWith("--")) {
-                if (i + 1 >= args.size()) throw new EvokerException(a + " needs a value");
-                flags.put(a, args.get(++i));
-            } else {
-                positional.add(a);
-            }
-        }
+    void add(List<String> positional, Map<String, String> flags) {
         String ref = arg(positional, 0, "add <slug> [version]  or  add <url> --type <type> [--name <name>]");
         String key;
         Manifest.Content entry;
@@ -556,12 +575,7 @@ public final class Main {
     record ListedServer(String software, String version, String build, boolean pinned, boolean installed) {}
 
     /** list [--output=text|json]: what evoker.json asks for and evoker.lock has, offline. */
-    String list(List<String> args) {
-        String output = "text";
-        for (String a : args) {
-            if (!a.startsWith("--output=")) throw new EvokerException("usage: evoker list [--output=text|json]");
-            output = a.substring("--output=".length());
-        }
+    String list(String output) {
         if (!output.equals("text") && !output.equals("json")) throw new EvokerException("--output must be text or json");
         Manifest manifest = Manifest.read(dir);
         Lock lock = Lock.read(dir);
