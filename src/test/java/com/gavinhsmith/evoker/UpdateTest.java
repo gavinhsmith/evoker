@@ -100,14 +100,26 @@ class UpdateTest {
     }
 
     @Test
-    void upgradeDryRunChangesNothing() throws IOException {
+    void upgradeListChangesNothing() throws IOException {
         betaVersions("1.21.4", "1.0");
         assertEquals(0, run("add", "beta", "1.0"));
         betaVersions("1.21.4", "1.0", "2.0");
         String manifest = Files.readString(dir.resolve(Manifest.FILE));
         String lock = Files.readString(dir.resolve(Lock.FILE));
 
-        assertEquals(0, run("upgrade", "--dry-run"));
+        assertEquals(0, run("upgrade", "--list"));
+        String out = Output.out(() -> assertEquals(0, run("upgrade", "--list", "--output=json")));
+        assertEquals(1, run("upgrade", "--output=json"));
+
+        var json = Json.MAPPER.readTree(out);
+        assertEquals(1, json.path("format").asInt());
+        assertTrue(json.path("server").isNull());
+        assertEquals(1, json.path("content").size());
+        var beta = json.path("content").get(0);
+        assertEquals("modrinth:beta", beta.path("key").asString());
+        assertEquals("updated", beta.path("change").asString());
+        assertEquals("1.0", beta.path("from").asString());
+        assertEquals("2.0", beta.path("to").asString());
 
         assertEquals(manifest, Files.readString(dir.resolve(Manifest.FILE)));
         assertEquals(lock, Files.readString(dir.resolve(Lock.FILE)));

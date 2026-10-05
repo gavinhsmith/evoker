@@ -30,7 +30,7 @@ Running a modded or plugin server usually means hunting down jars, matching vers
 - **One file describes the server.** `evoker.json` lists the software, the game version, your content and your `server.properties` settings. Commit it.
 - **Reproducible installs.** `evoker.lock` pins every jar to an exact version and SHA-256, like `package-lock.json` or `Cargo.lock`. Any machine gets byte-for-byte the same server.
 - **Dependencies handled.** Required dependencies are resolved recursively and removed again when nothing needs them.
-- **Safe upgrades.** `evoker upgrade --dry-run` shows what a new game version would change. Anything without a compatible release keeps its current version instead of breaking your setup.
+- **Safe upgrades.** `evoker upgrade --list` shows what a new game version would change. Anything without a compatible release keeps its current version instead of breaking your setup.
 - **Modpacks in one command.** `evoker import <modpack>` turns a Modrinth `.mrpack` into a server, keeping only the server-side mods.
 - **It runs the server.** evoker starts the server as a child process: same console, same Ctrl+C, same exit code.
 - **Git-friendly.** `evoker init --git` writes a `.gitignore` that tracks your configs and ignores everything evoker can download again.
@@ -101,7 +101,7 @@ evoker import cobblemon-fabric
 | `evoker import <pack>` | Import a Modrinth modpack (slug, `.mrpack` file or URL) |
 | `evoker install` | Download whatever is missing |
 | `evoker update [slug]` | Move `latest` entries to their newest versions |
-| `evoker upgrade [--dry-run]` | Move everything, pins included, to the newest versions for the game version |
+| `evoker upgrade [--list]` | Move everything, pins included, to the newest versions for the game version |
 | `evoker start` | Install, then run the server |
 | `evoker list [--output=json]` | Show what's installed: versions, pins, dependencies |
 | `evoker command` | Print the launch command, for systemd, Docker or a panel |

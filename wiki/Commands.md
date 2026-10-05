@@ -11,7 +11,7 @@ Run every command inside the server folder: `evoker <command>` (or `java -jar ev
 | `remove <slug>` | Removes the entry from `evoker.json`, then deletes it and every dependency nothing else needs anymore. |
 | `install` | Brings the folder in line with `evoker.json` and `evoker.lock`: resolves anything new or changed in `evoker.json`, downloads whatever is missing, deletes what was removed, applies `properties` and `eula`. |
 | `update [slug]` | Moves `latest` entries to their newest compatible versions, and the server to its newest build if `build` is `latest`. Pinned entries stay. With a slug, updates only that entry (and not the server). Prints what changed. |
-| `upgrade [--dry-run]` | Moves **everything** (pinned entries and a pinned server `build` included) to the newest versions for the current game version, and rewrites the pins in `evoker.json`. `--dry-run` prints the changes without touching anything. |
+| `upgrade [--list] [--output=text\|json]` | Moves **everything** (pinned entries and a pinned server `build` included) to the newest versions for the current game version, and rewrites the pins in `evoker.json`. `--list` prints the changes without touching anything; add `--output=json` for other tools, see [upgrade --list --output=json](#upgrade---list---outputjson). |
 | `start` | `install` (plus the auto-updates enabled in the `evoker` block), then runs the server as a child process. The console is passed through; evoker exits with the server's exit code. |
 | `list [--output=text\|json]` | Shows the server and every content entry: locked version, whether it is `latest`, `pinned`, a dependency (and of what) or a URL file, and entries in `evoker.json` that aren't installed yet. Offline. `--output=json` is for other tools; see [list --output=json](#list---outputjson). |
 | `command` | Prints the command `start` would run, on one line, for what is in `evoker.lock` (arguments containing spaces are double-quoted). Offline. Errors if nothing is installed yet. See [Running the server yourself](#running-the-server-yourself). |
@@ -28,7 +28,7 @@ Resolving keeps the locked version of every entry you didn't touch: `add` doesn'
 
 ## Changing the game version
 
-Edit `version` in `evoker.json`, then run `evoker upgrade` (try `--dry-run` first). Everything moves to its newest release for the new version.
+Edit `version` in `evoker.json`, then run `evoker upgrade` (try `--list` first). Everything moves to its newest release for the new version.
 
 Anything without a compatible version yet **keeps its current version** and prints a warning:
 
@@ -78,3 +78,27 @@ Only the JSON goes to stdout. Content is a flat list sorted by `key`; every fiel
 | `pinned` | `true` / `false` for entries in `evoker.json`; `null` for dependencies and URL entries. |
 | `requiredBy` | Keys of the entries that need this one. Empty for entries only you asked for. |
 | `installed` | `false` when the entry is in `evoker.json` but not in the lock yet (run `evoker install`). |
+
+## upgrade --list --output=json
+
+`--output=json` needs `--list`. Only the JSON goes to stdout; entries that keep their version because nothing compatible exists are still reported as warnings on stderr.
+
+```json
+{
+  "format": 1,
+  "server": {
+    "from": { "software": "fabric", "version": "1.21.4", "build": "0.19.5" },
+    "to": { "software": "fabric", "version": "1.21.4", "build": "0.19.6" }
+  },
+  "content": [
+    { "key": "modrinth:sodium", "change": "updated", "from": "0.6.5", "to": "0.6.9" },
+    { "key": "modrinth:fabric-api", "change": "added", "from": null, "to": "0.110.0" }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `format` | Version of this output, as for `list`. |
+| `server` | `null` when the server doesn't change. `from` is `null` when no server is installed yet. |
+| `content` | Only entries that change, sorted by `key`. `change` is `added`, `removed` or `updated`; `from` / `to` are versions, `null` where there is none (an added or removed side, or a URL entry). |

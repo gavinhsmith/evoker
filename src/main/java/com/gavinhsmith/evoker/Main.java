@@ -36,7 +36,9 @@ public final class Main {
               remove <slug>          remove content and whatever only it needed
               install                download whatever evoker.json / evoker.lock say is missing
               update [slug]          move "latest" entries (and the server build) to their newest versions
-              upgrade [--dry-run]    move everything, pins included, to the newest versions for this game version
+              upgrade [--list] [--output=text|json]
+                                     move everything, pins included, to the newest versions for this game version;
+                                     --list only shows what would change
               start                  install, then run the server
               list [--output=text|json]
                                      show the server and content: versions, pins, dependencies
@@ -83,7 +85,7 @@ public final class Main {
                 case "remove" -> main.remove(arg(rest, 0, "remove <slug>"));
                 case "install" -> main.install(Manifest.read(dir), false, key -> false);
                 case "update" -> main.update(rest.isEmpty() ? null : rest.get(0));
-                case "upgrade" -> main.upgrade(flags.containsKey("--dry-run"));
+                case "upgrade" -> main.upgrade(flags.containsKey("--list"), flags.getOrDefault("--output", "text"));
                 case "start" -> {
                     return main.start();
                 }
@@ -104,7 +106,7 @@ public final class Main {
     }
 
     private static final Set<String> VALUE_FLAGS = Set.of("--type", "--name", "--output");
-    private static final Set<String> SWITCHES = Set.of("--git", "--dry-run");
+    private static final Set<String> SWITCHES = Set.of("--git", "--list");
 
     /** Splits args into positional (added to positional) and flags: --flag value, --flag=value, or a bare switch. */
     static Map<String, String> flags(List<String> args, List<String> positional) {
@@ -376,7 +378,9 @@ public final class Main {
      * Moves every entry, pins and the server build included, to the newest version for the current game version
      * and rewrites the pins in evoker.json. Anything without a compatible version keeps its current one (warning).
      */
-    void upgrade(boolean dryRun) {
+    void upgrade(boolean listOnly, String output) {
+        checkOutput(output);
+        if (output.equals("json") && !listOnly) throw new EvokerException("--output=json needs --list");
         Manifest manifest = Manifest.read(dir);
         Lock before = Lock.read(dir);
         var unpinned = new LinkedHashMap<String, Manifest.Content>();
@@ -385,10 +389,18 @@ public final class Main {
         Manifest latest = manifest.withServer(new Manifest.ServerSpec(spec.software(), spec.version(), "latest"))
                 .withContent(unpinned);
 
-        Lock after = dryRun ? plan(latest, before, true, key -> true).lock() : install(latest, true, key -> true);
+        Lock after = listOnly ? plan(latest, before, true, key -> true).lock() : install(latest, true, key -> true);
+        if (output.equals("json")) {
+            var json = new LinkedHashMap<String, Object>();
+            json.put("format", 1);
+            json.put("server", serverChange(before, after));
+            json.put("content", changes(before, after));
+            System.out.println(Json.MAPPER.writeValueAsString(json));
+            return;
+        }
         printChanges(before, after);
-        if (dryRun) {
-            log("dry run: nothing was changed");
+        if (listOnly) {
+            log("nothing was changed (--list)");
             return;
         }
         // Write the new versions back into the entries that were pinned.
@@ -404,27 +416,57 @@ public final class Main {
         if (!upgraded.equals(manifest)) upgraded.write(dir);
     }
 
-    private static void printChanges(Lock before, Lock after) {
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    record ServerVersion(String software, String version, String build) {}
+
+    /** from is null when no server was installed. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    record ServerChange(ServerVersion from, ServerVersion to) {}
+
+    /** change is added, removed or updated; from / to are versions, null for url entries. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    record Change(String key, String change, String from, String to) {}
+
+    /** null when the server didn't change. */
+    private static ServerChange serverChange(Lock before, Lock after) {
         Lock.Locked a = before.server(), b = after.server();
-        if (b != null && (a == null || !a.software().equals(b.software()) || !a.version().equals(b.version())
-                || !Objects.equals(a.build(), b.build()))) {
-            log("server: " + (a == null ? "" : a.software() + " " + a.version() + " " + Objects.toString(a.build(), "") + " -> ")
-                    + b.software() + " " + b.version() + " " + Objects.toString(b.build(), ""));
-        }
+        if (b == null || (a != null && a.software().equals(b.software()) && a.version().equals(b.version())
+                && Objects.equals(a.build(), b.build()))) return null;
+        return new ServerChange(a == null ? null : new ServerVersion(a.software(), a.version(), a.build()),
+                new ServerVersion(b.software(), b.version(), b.build()));
+    }
+
+    private static List<Change> changes(Lock before, Lock after) {
         var keys = new TreeSet<>(before.content().keySet());
         keys.addAll(after.content().keySet());
-        int changed = 0;
+        var changes = new ArrayList<Change>();
         for (String key : keys) {
             Lock.Entry x = before.content().get(key), y = after.content().get(key);
             if (x != null && y != null && same(x, y)) continue;
-            changed++;
-            if (x == null) log(key + ": added " + label(y));
-            else if (y == null) log(key + ": removed");
-            else if (x.versionId() == null) log(key + ": file changed");
-            else log(key + ": " + x.version() + " -> " + y.version());
+            String change = x == null ? "added" : y == null ? "removed" : "updated";
+            changes.add(new Change(key, change, x == null ? null : x.version(), y == null ? null : y.version()));
         }
-        log(changed == 0 ? "content is up to date" : changed + " content change(s)");
-        if (keys.stream().anyMatch(k -> k.startsWith("url:"))) {
+        return changes;
+    }
+
+    private static void printChanges(Lock before, Lock after) {
+        ServerChange server = serverChange(before, after);
+        if (server != null) {
+            ServerVersion a = server.from(), b = server.to();
+            log("server: " + (a == null ? "" : a.software() + " " + a.version() + " " + Objects.toString(a.build(), "") + " -> ")
+                    + b.software() + " " + b.version() + " " + Objects.toString(b.build(), ""));
+        }
+        List<Change> changes = changes(before, after);
+        for (Change c : changes) {
+            log(c.key() + switch (c.change()) {
+                case "added" -> ": added" + (c.to() == null ? "" : " " + c.to());
+                case "removed" -> ": removed";
+                default -> c.from() == null ? ": file changed" : ": " + c.from() + " -> " + c.to();
+            });
+        }
+        log(changes.isEmpty() ? "content is up to date" : changes.size() + " content change(s)");
+        if (before.content().keySet().stream().anyMatch(k -> k.startsWith("url:"))
+                || after.content().keySet().stream().anyMatch(k -> k.startsWith("url:"))) {
             log("url entries are re-downloaded, not version-checked");
         }
     }
@@ -575,8 +617,12 @@ public final class Main {
     record ListedServer(String software, String version, String build, boolean pinned, boolean installed) {}
 
     /** list [--output=text|json]: what evoker.json asks for and evoker.lock has, offline. */
-    String list(String output) {
+    private static void checkOutput(String output) {
         if (!output.equals("text") && !output.equals("json")) throw new EvokerException("--output must be text or json");
+    }
+
+    String list(String output) {
+        checkOutput(output);
         Manifest manifest = Manifest.read(dir);
         Lock lock = Lock.read(dir);
         Manifest.ServerSpec spec = manifest.server();

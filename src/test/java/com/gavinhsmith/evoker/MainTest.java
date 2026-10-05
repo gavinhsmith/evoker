@@ -77,7 +77,7 @@ class MainTest {
         assertEquals(java.util.List.of("https://x/a.jar"), positional);
         assertEquals(java.util.Map.of("--type", "mod", "--name", "a=b", "--git", ""), flags);
         assertEquals(1, run("upgrade", "--dryrun"));
-        assertEquals(1, run("upgrade", "--dry-run=yes"));
+        assertEquals(1, run("upgrade", "--list=yes"));
         assertEquals(1, run("add", "x", "--type"));
     }
 
