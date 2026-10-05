@@ -11,7 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** update, upgrade and the auto-update settings, end to end against a fake Modrinth and Fabric. */
+/** update and upgrade end to end against a fake Modrinth and Fabric. */
 class UpdateTest {
     @TempDir
     Path dir;
@@ -27,18 +27,16 @@ class UpdateTest {
         return Main.run(dir, api.apis(), args);
     }
 
-    /** Publishes these versions of project "beta" (BBBB), newest last, each file containing its version number. */
+    /** Publishes these versions of project "beta" (BBBB) for a game version, newest last. */
     private void betaVersions(String gameVersion, String... versions) {
         var json = new StringBuilder("[");
         for (int i = versions.length - 1; i >= 0; i--) {
             String v = versions[i];
-            byte[] file = ("beta-" + v).getBytes();
-            api.bytes("/files/beta-" + v + ".jar", file);
             String version = """
                     {"id": "b%s", "project_id": "BBBB", "version_number": "%s", "version_type": "release",
                      "date_published": "2026-01-0%dT00:00:00Z", "loaders": ["fabric"],
-                     "files": [{"url": "%s/files/beta-%s.jar", "primary": true, "hashes": {"sha512": "%s"}}]}
-                    """.formatted(v, v, i + 1, api.base, v, FakeServer.hash("SHA-512", file));
+                     "files": [{"url": "%s/files/beta-%s.jar", "primary": true, "hashes": {"sha512": "b%s"}}]}
+                    """.formatted(v, v, i + 1, api.base, v, v);
             api.bytes("/modrinth/v2/version/b" + v, version.getBytes());
             json.append(version).append(i > 0 ? "," : "");
         }
@@ -46,108 +44,147 @@ class UpdateTest {
     }
 
     @BeforeEach
-    void fabric() throws IOException {
+    void fabricPack() {
         api.json("/fabric/v2/versions/loader/1.21.4", "fabric-loaders.json")
                 .json("/fabric/v2/versions/installer", "fabric-installers.json")
-                .bytes("/fabric/v2/versions/loader/1.21.4/0.19.5/1.1.2/server/jar", FakeServer.jar())
                 .json("/modrinth/v2/project/beta", "modrinth-project-beta.json")
                 .json("/modrinth/v2/project/BBBB", "modrinth-project-beta.json");
-        Files.writeString(dir.resolve(Manifest.FILE), """
-                { "server": { "software": "fabric", "version": "1.21.4" } }
-                """);
+        assertEquals(0, run("create", "P", "fabric", "1.21.4"));
     }
 
-    private String jar() throws IOException {
-        return Files.readString(dir.resolve("mods/modrinth-BBBB.jar"));
+    private String locked() {
+        return Lock.read(dir).content().get("modrinth:beta").version();
+    }
+
+    private String wanted() {
+        return Manifest.read(dir).content().get("modrinth:beta").version();
     }
 
     @Test
-    void installKeepsTheLockedVersionAndUpdateMovesLatestEntries() throws IOException {
+    void updateMovesLatestEntriesAndUpdateListOnlyShowsIt() throws IOException {
         betaVersions("1.21.4", "1.0");
         assertEquals(0, run("add", "beta"));
         betaVersions("1.21.4", "1.0", "2.0");
+        String lock = Files.readString(dir.resolve(Lock.FILE));
 
-        assertEquals(0, run("install"));
-        assertEquals("beta-1.0", jar());
+        String out = Output.out(() -> assertEquals(0, run("update", "list", "--output=json")));
+        var change = Json.MAPPER.readTree(out).path("content").get(0);
+        assertEquals("updated", change.path("change").asString());
+        assertEquals("1.0", change.path("from").asString());
+        assertEquals("2.0", change.path("to").asString());
+        assertEquals(false, change.path("pinned").asBoolean());
+        assertEquals(lock, Files.readString(dir.resolve(Lock.FILE)));
 
         assertEquals(0, run("update"));
-        assertEquals("beta-2.0", jar());
-        assertEquals("2.0", Lock.read(dir).content().get("modrinth:beta").version());
-        assertEquals("latest", Manifest.read(dir).content().get("modrinth:beta").version());
+        assertEquals("2.0", locked());
+        assertEquals("latest", wanted());
     }
 
     @Test
-    void updateKeepsPins() throws IOException {
+    void updateKeepsPinsUnlessNamed() {
         betaVersions("1.21.4", "1.0");
-        assertEquals(0, run("add", "beta", "1.0"));
+        assertEquals(0, run("add", "beta@1.0"));
         betaVersions("1.21.4", "1.0", "2.0");
+
+        assertEquals(0, run("update"));
+        assertEquals("1.0", locked());
 
         assertEquals(0, run("update", "beta"));
-
-        assertEquals("beta-1.0", jar());
+        assertEquals("2.0", locked());
+        assertEquals("2.0", wanted(), "the pin moves");
     }
 
     @Test
-    void upgradeRewritesPins() throws IOException {
-        betaVersions("1.21.4", "1.0");
-        assertEquals(0, run("add", "beta", "1.0"));
-        betaVersions("1.21.4", "1.0", "2.0");
-
-        assertEquals(0, run("upgrade"));
-
-        assertEquals("beta-2.0", jar());
-        assertEquals("2.0", Manifest.read(dir).content().get("modrinth:beta").version());
-    }
-
-    @Test
-    void upgradeDryRunChangesNothing() throws IOException {
-        betaVersions("1.21.4", "1.0");
-        assertEquals(0, run("add", "beta", "1.0"));
-        betaVersions("1.21.4", "1.0", "2.0");
-        String manifest = Files.readString(dir.resolve(Manifest.FILE));
-        String lock = Files.readString(dir.resolve(Lock.FILE));
-
-        assertEquals(0, run("upgrade", "--dry-run"));
-
-        assertEquals(manifest, Files.readString(dir.resolve(Manifest.FILE)));
-        assertEquals(lock, Files.readString(dir.resolve(Lock.FILE)));
-        assertEquals("beta-1.0", jar());
-    }
-
-    @Test
-    void upgradeKeepsWhatHasNoCompatibleVersionAndDoesNotBlockStart() throws IOException {
-        betaVersions("1.21.4", "1.0");
-        assertEquals(0, run("add", "beta", "1.0"));
-        String lock = Files.readString(dir.resolve(Lock.FILE));
-        // Move to a game version nothing supports yet: no fabric loader, no beta build.
-        Files.writeString(dir.resolve(Manifest.FILE),
-                Files.readString(dir.resolve(Manifest.FILE)).replace("1.21.4", "1.21.5"));
-        api.bytes("/fabric/v2/versions/loader/1.21.5", "[]".getBytes())
-                .bytes(FakeApi.modrinthVersions("BBBB", "1.21.5"), "[]".getBytes());
-
-        String err = Output.err(() -> assertEquals(0, run("upgrade")));
-
-        assertTrue(err.contains("fabric has no loader for 1.21.5; keeping fabric 1.21.4"), err);
-        assertTrue(err.contains("modrinth:beta has no version for fabric 1.21.5; keeping modrinth:beta 1.0"), err);
-        assertEquals(lock, Files.readString(dir.resolve(Lock.FILE)));
-        assertEquals("1.0", Manifest.read(dir).content().get("modrinth:beta").version());
-    }
-
-    @Test
-    void autoUpdateDepsOnStart() throws IOException {
+    void upgradeMovesTheGameVersion() {
         betaVersions("1.21.4", "1.0");
         assertEquals(0, run("add", "beta"));
+        api.json("/fabric/v2/versions/loader/1.21.5", "fabric-loaders.json");
+        betaVersions("1.21.5", "3.0");
+
+        Output.out(() -> assertEquals(0, run("upgrade", "1.21.5")));
+
+        assertEquals("1.21.5", Manifest.read(dir).game().version());
+        assertEquals("1.21.5", Lock.read(dir).game().version());
+        assertEquals("3.0", locked());
+    }
+
+    @Test
+    void upgradeAsksAboutPinsAndKeepsThemWithoutAConsole() {
+        betaVersions("1.21.4", "1.0");
+        assertEquals(0, run("add", "beta@1.0"));
         betaVersions("1.21.4", "1.0", "2.0");
-        Files.writeString(dir.resolve(Manifest.FILE), """
-                {
-                  "server": { "software": "fabric", "version": "1.21.4" },
-                  "content": { "modrinth:beta": "latest" },
-                  "evoker": { "autoUpdateDeps": true, "java": "%s" }
-                }
-                """.formatted(FakeServer.java().replace("\\", "\\\\")));
 
-        assertEquals(FakeServer.EXIT_CODE, run("start"));
+        String err = Output.err(() -> assertEquals(0, run("upgrade", "1.21.4")));
+        assertTrue(err.contains("modrinth:beta"), err);
+        assertTrue(err.contains("--pinned"), err);
+        assertEquals("1.0", wanted());
 
-        assertEquals("beta-2.0", jar());
+        assertEquals(0, run("upgrade", "1.21.4", "--pinned"));
+        assertEquals("2.0", wanted());
+        assertEquals("2.0", locked());
+    }
+
+    @Test
+    void upgradeListMarksPinsAndChangesNothing() throws IOException {
+        betaVersions("1.21.4", "1.0");
+        assertEquals(0, run("add", "beta@1.0"));
+        betaVersions("1.21.4", "1.0", "2.0");
+        String manifest = Files.readString(dir.resolve(Manifest.FILE)), lock = Files.readString(dir.resolve(Lock.FILE));
+
+        String all = Output.out(() -> assertEquals(0, run("upgrade", "list", "1.21.4", "--output=json")));
+        String keep = Output.out(() -> assertEquals(0, run("upgrade", "list", "1.21.4", "--keep-pinned", "--output", "json")));
+
+        var upgraded = Json.MAPPER.readTree(all).path("content").get(0);
+        assertEquals("updated", upgraded.path("change").asString());
+        assertTrue(upgraded.path("pinned").asBoolean());
+        var kept = Json.MAPPER.readTree(keep).path("content").get(0);
+        assertEquals("kept", kept.path("change").asString());
+        assertTrue(Json.MAPPER.readTree(keep).path("game").isNull());
+        assertEquals(manifest, Files.readString(dir.resolve(Manifest.FILE)));
+        assertEquals(lock, Files.readString(dir.resolve(Lock.FILE)));
+    }
+
+    @Test
+    void upgradeFailsWithoutALoaderBuildForTheNewVersion() throws IOException {
+        betaVersions("1.21.4", "1.0");
+        assertEquals(0, run("add", "beta"));
+        api.bytes("/fabric/v2/versions/loader/1.21.5", "[]".getBytes());
+        String manifest = Files.readString(dir.resolve(Manifest.FILE)), lock = Files.readString(dir.resolve(Lock.FILE));
+
+        String err = Output.err(() -> assertEquals(1, run("upgrade", "1.21.5")));
+
+        assertTrue(err.contains("fabric has no loader for 1.21.5"), err);
+        assertEquals(manifest, Files.readString(dir.resolve(Manifest.FILE)));
+        assertEquals(lock, Files.readString(dir.resolve(Lock.FILE)));
+    }
+
+    @Test
+    void upgradeKeepsContentWithoutACompatibleVersion() {
+        betaVersions("1.21.4", "1.0");
+        assertEquals(0, run("add", "beta"));
+        api.json("/fabric/v2/versions/loader/1.21.5", "fabric-loaders.json")
+                .bytes(FakeApi.modrinthVersions("BBBB", "1.21.5"), "[]".getBytes());
+
+        String err = Output.err(() -> assertEquals(0, run("upgrade", "1.21.5")));
+
+        assertTrue(err.contains("modrinth:beta has no version for fabric 1.21.5; keeping modrinth:beta 1.0"), err);
+        assertEquals("1.21.5", Manifest.read(dir).game().version());
+        assertEquals("1.0", locked());
+    }
+
+    @Test
+    void onlyUpdateAcceptsAChangedUrlFile() {
+        betaVersions("1.21.4", "1.0");
+        api.bytes("/dl/geyser.jar", "v1".getBytes());
+        assertEquals(0, run("url", "geyser", api.base + "/dl/geyser.jar", "plugin"));
+        String v1 = Lock.read(dir).content().get("url:geyser").hash();
+
+        api.bytes("/dl/geyser.jar", "v2".getBytes());
+        assertEquals(0, run("add", "beta"));
+        assertEquals(v1, Lock.read(dir).content().get("url:geyser").hash(), "other commands keep the locked hash");
+
+        assertEquals(0, run("update"));
+        assertEquals("sha256:" + FakeServer.hash("SHA-256", "v2".getBytes()),
+                Lock.read(dir).content().get("url:geyser").hash());
     }
 }

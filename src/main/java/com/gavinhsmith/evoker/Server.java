@@ -23,16 +23,17 @@ final class Server {
         this.apis = apis;
     }
 
-    Resolved resolve(Manifest.ServerSpec spec) {
-        return switch (spec.software()) {
-            case "vanilla" -> vanilla(spec.version());
-            case "paper" -> paper(spec.version(), spec.build());
-            case "purpur" -> purpur(spec.version(), spec.build());
-            case "fabric" -> fabric(spec.version(), spec.build());
-            case "quilt" -> quilt(spec.version(), spec.build());
-            case "neoforge" -> neoforge(spec.version(), spec.build());
-            case "spigot" -> spigot(spec.version(), spec.build());
-            default -> throw new EvokerException("unknown server software: " + spec.software());
+    /** The exact build (null for vanilla) and the server download for a game version and loader. */
+    Resolved resolve(Manifest.Game game) {
+        return switch (game.loader()) {
+            case "vanilla" -> vanilla(game.version());
+            case "paper" -> paper(game.version(), game.build());
+            case "purpur" -> purpur(game.version(), game.build());
+            case "fabric" -> fabric(game.version(), game.build());
+            case "quilt" -> quilt(game.version(), game.build());
+            case "neoforge" -> neoforge(game.version(), game.build());
+            case "spigot" -> spigot(game.version(), game.build());
+            default -> throw new EvokerException("unknown loader: " + game.loader());
         };
     }
 
@@ -50,39 +51,39 @@ final class Server {
         };
     }
 
-    static final String STAMP = ".evoker-installed";
-    static final String INSTALLER_LOG = ".evoker-installer.log";
-    static final String BUILDTOOLS_DIR = ".evoker-buildtools";
+    static final String STAMP = ".evoker/installer.stamp";
+    static final String INSTALLER_LOG = ".evoker/installer.log";
+    static final String BUILDTOOLS_DIR = ".evoker/buildtools";
 
     /**
      * For installer-based software, runs the installer unless the stamp file says this exact
-     * software/version/build is already installed. Other software needs nothing.
+     * software/version/build (and installer, identified by installerHash) is already installed.
+     * Other software needs nothing.
      */
-    static void runInstaller(Path dir, Lock.Locked locked, Manifest.Settings settings) {
+    static void runInstaller(Path dir, String software, String version, String build, String installerHash,
+                             String java) {
         Path cwd = dir;
-        List<String> args = switch (locked.software()) {
-            case "quilt" -> List.of("install", "server", locked.version(), locked.build(), "--download-server",
-                    "--install-dir=.");
+        List<String> args = switch (software) {
+            case "quilt" -> List.of("install", "server", version, build, "--download-server", "--install-dir=.");
             case "neoforge" -> List.of("--installServer", ".");
             case "spigot" -> {
                 // BuildTools clones and compiles in its own folder, then writes server.jar into the server folder.
                 cwd = dir.resolve(BUILDTOOLS_DIR);
-                yield List.of("--rev", locked.build(), "--compile", "spigot", "--output-dir",
+                yield List.of("--rev", build, "--compile", "spigot", "--output-dir",
                         dir.toAbsolutePath().toString(), "--final-name", "server.jar", "--nogui");
             }
             default -> null;
         };
         if (args == null) return;
-        String stamp = locked.software() + " " + locked.version() + " " + locked.build() + " " + locked.sha256();
+        String stamp = software + " " + version + " " + build + " " + installerHash;
         Path stampFile = dir.resolve(STAMP);
         try {
             if (Files.exists(stampFile) && Files.readString(stampFile).equals(stamp)) return;
             Files.createDirectories(cwd);
-            var command = new ArrayList<>(List.of(settings.java(), "-jar",
-                    dir.resolve(jarName(locked.software())).toAbsolutePath().toString()));
+            var command = new ArrayList<>(List.of(java, "-jar", dir.resolve(jarName(software)).toAbsolutePath().toString()));
             command.addAll(args);
-            Main.log("running the " + locked.software() + " installer (output also saved to " + INSTALLER_LOG + ")"
-                    + (locked.software().equals("spigot") ? "; building spigot takes several minutes" : ""));
+            Main.log("running the " + software + " installer (output also saved to " + INSTALLER_LOG + ")"
+                    + (software.equals("spigot") ? "; building spigot takes several minutes" : ""));
             Process p = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true).start();
             p.getOutputStream().close(); // installers need no input
             // Show the output live and keep a copy for after it scrolls away.
@@ -96,37 +97,37 @@ final class Server {
             }
             int exit = p.waitFor();
             if (exit != 0) {
-                throw new EvokerException(locked.software() + " installer failed (exit " + exit + "); see " + INSTALLER_LOG);
+                throw new EvokerException(software + " installer failed (exit " + exit + "); see " + INSTALLER_LOG);
             }
             Files.writeString(stampFile, stamp);
         } catch (IOException e) {
-            throw new EvokerException("cannot run the " + locked.software() + " installer: " + e.getMessage(), e);
+            throw new EvokerException("cannot run the " + software + " installer: " + e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new EvokerException("interrupted", e);
         }
     }
 
-    static List<String> command(Lock.Locked locked, Manifest.Settings settings, Path dir) {
+    static List<String> command(String software, String build, String java, List<String> jvmArgs, Path dir) {
         var command = new ArrayList<String>();
-        command.add(settings.java());
-        command.addAll(settings.jvmArgs());
-        switch (locked.software()) {
+        command.add(java);
+        command.addAll(jvmArgs);
+        switch (software) {
             case "quilt" -> command.addAll(List.of("-jar", "quilt-server-launch.jar"));
             case "neoforge" -> {
                 // What NeoForge's own run.sh / run.bat do.
                 if (Files.exists(dir.resolve("user_jvm_args.txt"))) command.add("@user_jvm_args.txt");
                 String args = System.getProperty("os.name").startsWith("Windows") ? "win_args.txt" : "unix_args.txt";
-                command.add("@libraries/net/neoforged/neoforge/" + locked.build() + "/" + args);
+                command.add("@libraries/net/neoforged/neoforge/" + build + "/" + args);
             }
             case "spigot" -> command.addAll(List.of("-jar", "server.jar"));
-            default -> command.addAll(List.of("-jar", jarName(locked.software())));
+            default -> command.addAll(List.of("-jar", jarName(software)));
         }
         command.add("nogui");
         return command;
     }
 
-    /** The newest Minecraft release, e.g. for evoker init. */
+    /** The newest Minecraft release, e.g. for evoker create. */
     String latestRelease() {
         return http.json(apis.mojang() + "/mc/game/version_manifest_v2.json").path("latest").path("release").asString();
     }

@@ -24,69 +24,60 @@ Both scripts install the latest release; set `EVOKER_VERSION` (e.g. `v0.1.0`) fo
 
 **By hand:** download `evoker.jar` from the [latest release](https://github.com/gavinhsmith/evoker/releases/latest) and use `java -jar evoker.jar <command>` wherever these pages say `evoker <command>`.
 
-Run every command inside your server folder.
-
-## 2. Create the server
+## 2. Make a pack
 
 In an empty folder:
 
 ```sh
-evoker init paper 1.21.4 --git
+evoker create "My Pack" fabric 1.21.4 --git
 ```
 
-This writes `evoker.json` (software and version default to `paper` and the newest Minecraft release). `--git` also runs `git init` and writes a `.gitignore` for a Minecraft server (see [below](#git)).
+This writes [`evoker.json`](evoker-json) and [`evoker.lock`](evoker-lock). The side (`client`, `server` or `both`) defaults to `both` for mod loaders and `server` for Paper, Purpur and Spigot; give it after the game version to choose. `--git` also runs `git init`. Add an `icon.png` if you like.
 
-Edit `evoker.json`:
-
-```json
-{
-  "server": { "software": "paper", "version": "1.21.4", "build": "latest" },
-  "eula": true,
-  "properties": { "motd": "My server", "max-players": 20 },
-  "content": {},
-  "evoker": { "jvmArgs": ["-Xmx4G"] }
-}
-```
-
-`"eula": true` means you accept the [Minecraft EULA](https://aka.ms/MinecraftEULA); evoker writes `eula.txt` for you.
-
-See [evoker.json](evoker-json) for every option.
-
-## 3. Add content
+Add content:
 
 ```sh
-evoker add luckperms
-evoker add hangar:ViaVersion
+evoker add lithium                       # server-side performance mod
+evoker add sodium                        # client-only: evoker works the sides out
+evoker add distant-horizons --optional   # players choose
+evoker add modrinth:terralith@2.5.8      # pinned to a version
+evoker list
 ```
 
-Dependencies come along automatically. See [Content Sources](Content-Sources).
+Nothing is installed in the pack folder: `add` only resolves versions and dependencies into `evoker.lock`. See [Content Sources](Content-Sources).
 
-## 4. Start it
+Keep it current with `evoker update` (newest versions for this game version) and `evoker upgrade` (a new game version). Both have a `list` form that only shows what would change.
+
+## 3. Publish it
+
+Commit `evoker.json`, `evoker.lock` and the icon, and push to GitHub (or put them anywhere that serves plain files). The folder's raw URL is the **pack URL**:
+
+```
+https://raw.githubusercontent.com/<you>/<pack>/main/
+```
+
+Every `update` / `upgrade` you push reaches servers on their next `server start`, and players on their next launch.
+
+## 4. Run a server
+
+In an empty folder on the server:
 
 ```sh
-evoker start
+evoker install server https://raw.githubusercontent.com/<you>/<pack>/main/
+evoker config jvmArgs '["-Xmx4G"]'
+evoker server start
 ```
 
-evoker downloads the server jar, writes [evoker.lock](evoker-lock), applies your `properties` to `server.properties`, and runs the server. The server console works as usual; type `stop` to shut it down. evoker exits with the server's exit code.
+`install server` asks you to accept the Minecraft EULA. `server start` checks the pack for updates, then runs the server; type `stop` to shut it down. `server.properties` and the server's configs are yours to edit; evoker leaves them alone. See [Servers](Servers).
 
-The next `start` downloads nothing: the lock says what is installed, and the files on disk match it.
+While writing a pack, test it with `evoker install server --local <pack folder>`.
 
-## Git
+## 5. Play
 
-Commit `evoker.json` **and** `evoker.lock`: any machine running `evoker start` then gets exactly the same server.
+Players install evoker and [Prism Launcher](https://prismlauncher.org), then:
 
-The `.gitignore` written by `init --git` ignores what evoker or the server can recreate, and keeps what you configure by hand:
+```sh
+evoker install https://raw.githubusercontent.com/<you>/<pack>/main/
+```
 
-| Ignored | Tracked |
-|---|---|
-| `server.jar`, `fabric-server-launch.jar`, `quilt-server-launch.jar`, `*-installer.jar`, `BuildTools.jar`, `run.sh`, `run.bat`, `.evoker-*` | `evoker.json`, `evoker.lock`, `user_jvm_args.txt` |
-| evoker-managed jars: `mods/` and `plugins/` files named `modrinth-*`, `hangar-*`, `url-*` | jars you drop into `mods/` or `plugins/` yourself |
-| `libraries/`, `versions/`, `cache/`, `.fabric/`, `.quilt/`, `plugins/.paper-remapped/` | `server.properties`, `config/`, `plugins/<plugin>/` config folders |
-| `logs/`, `crash-reports/`, `debug/`, `usercache.json` | `ops.json`, `whitelist.json`, ban lists |
-| `world/`, `world_nether/`, `world_the_end/` | |
-
-Worlds are ignored because they're large and change constantly; back them up separately. If you change `level-name`, update the world folders in `.gitignore` to match.
-
-An existing `.gitignore` is left alone.
-
-**Secrets:** `server.properties` can contain `rcon.password`, and mod configs can hold tokens (a Discord bot token, for example). Keep those out of public repositories.
+This creates a Prism instance with the pack's content and asks about the optional entries. Launch it from Prism; every launch checks the pack for updates first. See [Clients](Clients).

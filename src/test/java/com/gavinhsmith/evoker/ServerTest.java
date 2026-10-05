@@ -17,8 +17,8 @@ class ServerTest {
         api.close();
     }
 
-    private static Manifest.ServerSpec spec(String software, String build) {
-        return new Manifest.ServerSpec(software, "1.21.4", build);
+    private static Manifest.Game spec(String loader, String build) {
+        return new Manifest.Game("1.21.4", loader, build);
     }
 
     @Test
@@ -34,7 +34,7 @@ class ServerTest {
     void vanillaUnknownVersion() {
         api.json("/mojang/mc/game/version_manifest_v2.json", "mojang-manifest.json");
         var e = assertThrows(EvokerException.class,
-                () -> server.resolve(new Manifest.ServerSpec("vanilla", "9.9", null)));
+                () -> server.resolve(new Manifest.Game("9.9", "vanilla", null)));
         assertTrue(e.getMessage().contains("unknown Minecraft version"), e.getMessage());
     }
 
@@ -98,8 +98,8 @@ class ServerTest {
                         null, null),
                 server.resolve(spec("neoforge", "latest")));
         assertEquals("21.5.1-beta",
-                server.resolve(new Manifest.ServerSpec("neoforge", "1.21.5", null)).build(), "beta when nothing else");
-        assertThrows(EvokerException.class, () -> server.resolve(new Manifest.ServerSpec("neoforge", "1.20", null)));
+                server.resolve(new Manifest.Game("1.21.5", "neoforge", null)).build(), "beta when nothing else");
+        assertThrows(EvokerException.class, () -> server.resolve(new Manifest.Game("1.20", "neoforge", null)));
     }
 
     @Test
@@ -111,12 +111,6 @@ class ServerTest {
     }
 
     @Test
-    void unknownSoftware() {
-        var e = assertThrows(EvokerException.class, () -> server.resolve(spec("bukkit", "latest")));
-        assertTrue(e.getMessage().contains("unknown server software"), e.getMessage());
-    }
-
-    @Test
     void spigotUnknownVersion() {
         var e = assertThrows(EvokerException.class, () -> server.resolve(spec("spigot", "latest")));
         assertTrue(e.getMessage().contains("spigot has no build for 1.21.4"), e.getMessage());
@@ -124,17 +118,13 @@ class ServerTest {
 
     @Test
     void launchCommands(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {
-        var settings = new Manifest.Settings(false, false, "/opt/java", List.of("-Xmx4G"));
+        List<String> jvm = List.of("-Xmx4G");
         assertEquals(List.of("/opt/java", "-Xmx4G", "-jar", "server.jar", "nogui"),
-                Server.command(locked("paper", "232"), settings, dir));
-        assertEquals("fabric-server-launch.jar", Server.command(locked("fabric", "0.19.5"), settings, dir).get(3));
-        assertEquals("quilt-server-launch.jar", Server.command(locked("quilt", "0.29.2"), settings, dir).get(3));
+                Server.command("paper", "232", "/opt/java", jvm, dir));
+        assertEquals("fabric-server-launch.jar", Server.command("fabric", "0.19.5", "/opt/java", jvm, dir).get(3));
+        assertEquals("quilt-server-launch.jar", Server.command("quilt", "0.29.2", "/opt/java", jvm, dir).get(3));
         String args = System.getProperty("os.name").startsWith("Windows") ? "win_args.txt" : "unix_args.txt";
         assertEquals(List.of("/opt/java", "-Xmx4G", "@libraries/net/neoforged/neoforge/21.4.158/" + args, "nogui"),
-                Server.command(locked("neoforge", "21.4.158"), settings, dir));
-    }
-
-    private static Lock.Locked locked(String software, String build) {
-        return new Lock.Locked(software, "1.21.4", build, "https://x", "sha");
+                Server.command("neoforge", "21.4.158", "/opt/java", jvm, dir));
     }
 }

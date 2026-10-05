@@ -4,7 +4,7 @@ Instructions for coding agents working on evoker.
 
 ## What this is
 
-evoker is a Java 21 CLI that manages a Minecraft server's dependencies. `evoker.json` (user-written) declares the server software, game version and content; `evoker.lock` (tool-written) records exactly what is installed; evoker launches the server as a child process. File formats, commands and behavior are documented in [`wiki/`](wiki/). Treat it as the spec, and update it when behavior changes.
+evoker is a Java 21 CLI package manager for Minecraft. A pack is `evoker.json` (author-written: name, side, game version, loader, content) plus `evoker.lock` (tool-written: exact versions, URLs, hashes, sides). Pack commands only edit those two files; servers and Prism clients install from a published pack. File formats, commands and behavior are documented in [`wiki/`](wiki/). Treat it as the spec, and update it when behavior changes.
 
 ## Build and test
 
@@ -21,12 +21,18 @@ evoker is a Java 21 CLI that manages a Minecraft server's dependencies. `evoker.
 
 `src/main/java/com/gavinhsmith/evoker/`, kept flat on purpose:
 
-- `Main`: CLI entry; a `switch` on the command, no CLI library. Also the install flow: `plan` (resolve, no side effects; used by `upgrade --dry-run`) then apply (download, delete, write lock)
+- `Main`: CLI entry; a `switch` on the command, no CLI library. Also the pack commands and `lock()`: resolving a pack into its lock (online only for what the lock doesn't already satisfy)
 - `Manifest`, `Lock`: `evoker.json` / `evoker.lock` records and JSON IO (`Json` holds the one mapper)
 - `Source` + `Modrinth`, `Hangar`, `UrlSource`: content providers; `Mrpack`: reading .mrpack files for `import`
-- `Server`: per-software resolution, installers (quilt, neoforge, spigot) and launch command
-- `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure
+- `Server`: per-loader build resolution, installers (quilt, neoforge, spigot) and launch command
+- `Resolver`: recursive dependency resolution, conflicts, pruning, keep-locked-on-failure, and each entry's sides
+- `Pack`: fetching a published pack (URL or local folder) for servers and clients
+- `ServerFolder`: `install server`, `server update` / `start` / `command`, and the `.evoker/` state of a server folder
+- `PrismInstance`: `install <pack>` as a Prism Launcher instance, client content, optional choices (`client options`), and `client update` (Prism's pre-launch hook)
+- `Overrides`: a pack's override folders (configs): scanning them into the lock, installing them without overwriting files someone changed
+- `Dialogs`: the Swing windows shown when Prism runs evoker before a launch (no console there): optional choices and update messages
 - `Installer`: file placement, lock-hash checks, `server.properties` / `eula.txt`
+- `Config`: `evoker config`, evoker's own settings (a server's `.evoker/config.json`, or the user's)
 - `install.sh` / `install.ps1` (repo root): one-command installers; CI runs both against the built jar
 - `Http`: JSON GETs and hashed downloads; `Apis`: every upstream base URL; `EvokerException`: user-facing errors
 
@@ -34,9 +40,12 @@ Tests live in `src/test/java/com/gavinhsmith/evoker/`. `FakeApi` serves fixtures
 
 ## Behavior rules worth knowing
 
-- Never block `start`: if something can't be resolved but is locked, keep the locked version and warn.
-- `install` / `start` go online only when `evoker.json` asks for something the lock doesn't satisfy.
-- A file whose download no longer matches its locked sha256 is never installed (warning); `update` is how a URL entry accepts a new file.
+- Pack commands never install anything; they resolve into `evoker.lock` (hashes come from upstream, or a one-off temp download).
+- If something can't be resolved but is locked, keep the locked version and warn (`update` / `upgrade` never fail on content; `upgrade` does fail without a loader build).
+- Resolving goes online only when `evoker.json` asks for something the lock doesn't satisfy.
+- A file whose download no longer matches its locked hash is never installed (warning); `update` is how a URL entry accepts a new file.
+- Never block `server start`: an unreachable pack or a failed download keeps what is installed, with a warning.
+- `evoker config` only touches evoker's own settings, never the server's (`server.properties`, configs) or a game's.
 
 ## Rules
 

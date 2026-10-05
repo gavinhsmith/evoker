@@ -13,7 +13,7 @@ import java.util.function.Predicate;
 
 /** Resolves evoker.json content, and every required dependency recursively, into lock entries. */
 final class Resolver {
-    static final Manifest.Content LATEST = new Manifest.Content("latest", null, null);
+    static final Manifest.Content LATEST = Manifest.Content.of("latest");
 
     private final Map<String, Source> sources;
 
@@ -25,9 +25,9 @@ final class Resolver {
      * Breadth-first from the evoker.json entries. A locked entry that still satisfies evoker.json keeps its
      * version unless refresh says otherwise; everything else resolves to the newest compatible version.
      * Explicit entries win over dependencies; two different exact dependency versions resolve to the newer one.
+     * The result has requiredBy, sides and optional set (see {@link #finish}).
      */
-    Map<String, Source.Resolution> resolve(Manifest manifest, Map<String, Lock.Entry> locked,
-                                           Predicate<String> refresh) {
+    Map<String, Lock.Entry> resolve(Manifest manifest, Map<String, Lock.Entry> locked, Predicate<String> refresh) {
         record Job(String key, String source, String ref, Manifest.Content wanted, String exactVersionId, String parent) {}
 
         var lockedByProject = new HashMap<String, String>();
@@ -36,7 +36,7 @@ final class Resolver {
         var queue = new ArrayDeque<Job>();
         manifest.content().forEach((key, content) -> {
             Lock.Entry have = locked.get(key);
-            String exact = have != null && !refresh.test(key) && satisfies(have, content) ? have.versionId() : null;
+            String exact = have != null && !refresh.test(key) && satisfies(have, content, manifest) ? have.versionId() : null;
             queue.add(new Job(key, source(key), ref(key), content, exact, null));
         });
 
@@ -55,7 +55,7 @@ final class Resolver {
                 Source.Resolution have = resolved.get(key);
                 if (job.exactVersionId() == null || job.exactVersionId().equals(have.entry().versionId())
                         || manifest.content().containsKey(key)) continue;
-                r = sourceNamed(job.source()).resolve(job.ref(), LATEST, job.exactVersionId(), manifest.server());
+                r = sourceNamed(job.source()).resolve(job.ref(), LATEST, job.exactVersionId(), manifest.game());
                 String newer = r.published().compareTo(have.published()) > 0 ? r.entry().version() : have.entry().version();
                 Main.warn(key + ": " + job.parent() + " wants " + r.entry().version() + ", another entry wants "
                         + have.entry().version() + "; using the newer " + newer);
@@ -71,7 +71,7 @@ final class Resolver {
                     exact = locked.get(lockedKey).versionId();
                 }
                 try {
-                    r = sourceNamed(job.source()).resolve(job.ref(), job.wanted(), exact, manifest.server());
+                    r = sourceNamed(job.source()).resolve(job.ref(), job.wanted(), exact, manifest.game());
                 } catch (EvokerException e) {
                     // Nothing compatible (or upstream trouble): keep what is installed and let the user decide.
                     if (lockedKey == null) throw e;
@@ -97,10 +97,52 @@ final class Resolver {
             if (other != null) Main.warn(pair[0] + " is marked incompatible with " + other);
         }
 
-        var result = new TreeMap<String, Source.Resolution>();
+        var result = new TreeMap<String, Lock.Entry>();
         resolved.forEach((key, r) -> {
             Set<String> by = requiredBy.get(key);
-            result.put(key, r.withEntry(r.entry().withRequiredBy(by == null ? null : List.copyOf(by))));
+            result.put(key, r.entry().withRequiredBy(by == null ? null : List.copyOf(by)));
+        });
+        return finish(result, manifest);
+    }
+
+    /**
+     * Sets where each entry is installed, and which are optional. An evoker.json entry goes where its "side" says,
+     * or where it runs, limited to the pack's sides; nothing left is an error. A dependency goes where the entries
+     * that need it go, limited to where it runs (if that leaves nothing, where they go). entries' current sides are
+     * taken as where each one runs.
+     */
+    static Map<String, Lock.Entry> finish(Map<String, Lock.Entry> entries, Manifest manifest) {
+        var sides = new HashMap<String, List<String>>();
+        manifest.content().forEach((key, c) -> {
+            Lock.Entry e = entries.get(key);
+            if (e == null) return;
+            List<String> runs = c.side() != null ? Manifest.sides(c.side()) : e.sides();
+            List<String> s = Manifest.sides(runs, manifest.sides());
+            if (s.isEmpty()) {
+                throw new EvokerException(key + " runs only on the " + String.join(" and ", runs)
+                        + ", and this is a " + manifest.side() + " pack");
+            }
+            sides.put(key, s);
+        });
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (var e : entries.entrySet()) {
+                if (manifest.content().containsKey(e.getKey()) || e.getValue().requiredBy() == null) continue;
+                var needed = new TreeSet<String>();
+                e.getValue().requiredBy().forEach(by -> needed.addAll(sides.getOrDefault(by, List.of())));
+                List<String> s = Manifest.sides(needed, e.getValue().sides());
+                if (s.isEmpty()) s = Manifest.sides(needed, needed);
+                if (!s.equals(sides.get(e.getKey()))) {
+                    sides.put(e.getKey(), s);
+                    changed = true;
+                }
+            }
+        }
+        var result = new TreeMap<String, Lock.Entry>();
+        entries.forEach((key, e) -> {
+            Manifest.Content c = manifest.content().get(key);
+            result.put(key, e.withSides(sides.getOrDefault(key, e.sides())).withOptional(c != null && c.isOptional()));
         });
         return result;
     }
@@ -113,7 +155,7 @@ final class Resolver {
                 deps.add(new Source.Dependency(d.projectId(), d.versionId(), false));
             }
         });
-        return new Source.Resolution(ref(key), locked.get(key).withRequiredBy(null), "", deps, null, null);
+        return new Source.Resolution(ref(key), locked.get(key).withRequiredBy(null), "", deps);
     }
 
     /** Keeps the evoker.json entries and whatever they (transitively) require; drops the rest, cycles included. */
@@ -139,9 +181,13 @@ final class Resolver {
         return kept;
     }
 
-    /** Does the locked entry still match what evoker.json asks for? */
-    static boolean satisfies(Lock.Entry locked, Manifest.Content wanted) {
-        if (wanted.url() != null) return wanted.url().equals(locked.url()) && wanted.type().equals(locked.type());
+    /** Does the locked entry still match what evoker.json asks for (version, type, side, optional)? */
+    static boolean satisfies(Lock.Entry locked, Manifest.Content wanted, Manifest manifest) {
+        if (wanted.type() != null && !wanted.type().equals(locked.type())) return false;
+        if (wanted.side() != null
+                && !Manifest.sides(Manifest.sides(wanted.side()), manifest.sides()).equals(locked.sides())) return false;
+        if (wanted.isOptional() != Boolean.TRUE.equals(locked.optional())) return false;
+        if (wanted.url() != null) return wanted.url().equals(locked.url());
         return wanted.version() == null || wanted.version().equals("latest")
                 || wanted.version().equals(locked.version()) || wanted.version().equals(locked.versionId());
     }

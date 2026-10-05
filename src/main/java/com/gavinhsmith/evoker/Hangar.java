@@ -15,9 +15,9 @@ final class Hangar implements Source {
     }
 
     @Override
-    public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.ServerSpec server) {
-        if (!List.of("paper", "purpur").contains(server.software())) {
-            throw new EvokerException("hangar:" + ref + ": Hangar plugins need paper or purpur, not " + server.software());
+    public Resolution resolve(String ref, Manifest.Content wanted, String exactVersionId, Manifest.Game game) {
+        if (!List.of("paper", "purpur").contains(game.loader())) {
+            throw new EvokerException("hangar:" + ref + ": Hangar plugins need paper or purpur, not " + game.loader());
         }
         JsonNode project = http.jsonOrNull(api + "/projects/" + Http.enc(ref));
         if (project == null) throw new EvokerException("no Hangar project \"" + ref + "\"");
@@ -30,16 +30,16 @@ final class Hangar implements Source {
         } else if (wanted.version().equals("latest")) {
             // Newest release; only if there is none, the newest of any channel (snapshots, betas).
             String query = api + "/projects/" + Http.enc(slug) + "/versions?limit=1&platform=PAPER&platformVersion="
-                    + Http.enc(server.version());
+                    + Http.enc(game.version());
             JsonNode versions = http.json(query + "&channel=Release").path("result");
             if (versions.isEmpty()) versions = http.json(query).path("result");
-            if (versions.isEmpty()) throw new EvokerException(key + " has no version for paper " + server.version());
+            if (versions.isEmpty()) throw new EvokerException(key + " has no version for paper " + game.version());
             chosen = versions.get(0);
         } else {
             chosen = http.jsonOrNull(api + "/projects/" + Http.enc(slug) + "/versions/" + Http.enc(wanted.version()));
             if (chosen == null) throw new EvokerException(key + " has no version " + wanted.version());
             if (chosen.path("platformDependencies").path("PAPER").valueStream()
-                    .noneMatch(v -> v.asString().equals(server.version()))) Main.warn(key + " " + wanted.version() + " is not marked compatible with paper " + server.version());
+                    .noneMatch(v -> v.asString().equals(game.version()))) Main.warn(key + " " + wanted.version() + " is not marked compatible with paper " + game.version());
         }
 
         JsonNode download = chosen.path("downloads").path("PAPER");
@@ -59,9 +59,9 @@ final class Hangar implements Source {
             }
         }
 
-        var entry = new Lock.Entry("plugin", project.path("id").asString(), chosen.path("id").asString(),
-                chosen.path("name").asString(), url, null, null, null);
-        return new Resolution(slug, entry, chosen.path("createdAt").asString(), dependencies,
-                sha256 == null ? null : "SHA-256", sha256);
+        var entry = new Lock.Entry("plugin", List.of("server"), null, project.path("name").asString(null),
+                project.path("description").asString(null), project.path("id").asString(), chosen.path("id").asString(),
+                chosen.path("name").asString(), url, sha256 == null ? null : "sha256:" + sha256, null, null);
+        return new Resolution(slug, entry, chosen.path("createdAt").asString(), dependencies);
     }
 }

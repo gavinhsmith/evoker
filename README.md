@@ -2,10 +2,10 @@
 
 <h1><img src=".github/logo.svg" alt="evoker" width="480"></h1>
 
-**A package manager for Minecraft servers.**
+**A package manager for Minecraft.**
 
-Declare the server software, mods, plugins and packs in one file.<br>
-evoker installs them with their dependencies, locks the exact versions, keeps them updated, and runs the server.
+Describe a pack once: the game version, the loader, the mods, plugins, resource packs, shaders and configs.<br>
+evoker locks the exact versions and builds it on your server and on your players' Prism Launcher, and keeps both up to date.
 
 [![Release](https://img.shields.io/github/v/release/gavinhsmith/evoker?label=release)](https://github.com/gavinhsmith/evoker/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/gavinhsmith/evoker/total)](https://github.com/gavinhsmith/evoker/releases)
@@ -18,28 +18,32 @@ evoker installs them with their dependencies, locks the exact versions, keeps th
 </div>
 
 ```sh
-evoker init fabric 1.21.4   # describe the server (then set "eula": true)
-evoker add lithium          # mods and plugins from Modrinth or Hangar, dependencies included
-evoker start                # download what's missing, lock it, run the server
+evoker create "My Pack" fabric 1.21.4      # write the pack
+evoker add lithium                         # content from Modrinth or Hangar, dependencies included
+evoker install server <pack-url>           # on the server
+evoker install <pack-url>                  # on a player's computer: a Prism Launcher instance
 ```
 
 ## Why evoker
 
-Running a modded or plugin server usually means hunting down jars, matching versions by hand, and hoping the next machine ends up with the same files. evoker treats the server like a software project:
+Running a modded server usually means hunting down jars, matching versions by hand, and sending every player a zip that is out of date by next week. evoker treats the whole setup as one project:
 
-- **One file describes the server.** `evoker.json` lists the software, the game version, your content and your `server.properties` settings. Commit it.
-- **Reproducible installs.** `evoker.lock` pins every jar to an exact version and SHA-256, like `package-lock.json` or `Cargo.lock`. Any machine gets byte-for-byte the same server.
-- **Dependencies handled.** Required dependencies are resolved recursively and removed again when nothing needs them.
-- **Safe upgrades.** `evoker upgrade --dry-run` shows what a new game version would change. Anything without a compatible release keeps its current version instead of breaking your setup.
-- **Modpacks in one command.** `evoker import <modpack>` turns a Modrinth `.mrpack` into a server, keeping only the server-side mods.
-- **It runs the server.** evoker starts the server as a child process: same console, same Ctrl+C, same exit code.
-- **Git-friendly.** `evoker init --git` writes a `.gitignore` that tracks your configs and ignores everything evoker can download again.
+- **One pack, both sides.** `evoker.json` lists the game, the loader and the content. evoker knows what runs where (Modrinth says which mods are client-only, server-only or both), so the server gets the server's files and players get theirs.
+- **Reproducible.** `evoker.lock` pins every file to an exact version and hash, like `package-lock.json` or `Cargo.lock`. Every server and every player ends up with the same files.
+- **Updates reach everyone.** Push a change to the pack's repo: servers pick it up on their next `evoker server start`, and players on their next launch, because evoker runs before Prism starts the game. A new game version stops that launch once, with a message, and the next one plays.
+- **Dependencies handled.** Required dependencies are resolved recursively and dropped again when nothing needs them.
+- **Optional content.** Mark something optional and players choose whether they want it.
+- **Configs that stay yours.** Packs can ship config files. Once a server owner or player changes one, evoker never overwrites it.
+- **Safe upgrades.** `evoker upgrade list 1.21.5` shows what a new game version would change. Anything without a compatible release keeps its current version instead of breaking the pack.
+- **Modpacks in one command.** `evoker import <modpack>` turns a Modrinth `.mrpack` into an evoker pack, configs included.
 
 ## Supported
 
-**Server software:** Vanilla · Paper · Purpur · Spigot (built with BuildTools) · Fabric · Quilt · NeoForge
+**Loaders:** Vanilla · Fabric · Quilt · NeoForge · Paper · Purpur · Spigot (built with BuildTools). Plugin servers pair with vanilla clients.
 
-**Content:** [Modrinth](https://modrinth.com) (mods, plugins, data packs, resource packs, modpacks) · [Hangar](https://hangar.papermc.io) (Paper plugins) · any URL
+**Content:** [Modrinth](https://modrinth.com) (mods, plugins, data packs, resource packs, shaders, modpacks) · [Hangar](https://hangar.papermc.io) (Paper plugins) · any URL
+
+**Clients:** [Prism Launcher](https://prismlauncher.org)
 
 Runs on Windows, Linux and macOS with Java 21 or newer.
 
@@ -59,58 +63,65 @@ This installs the latest release and an `evoker` command. You can also download 
 
 ## Quick start
 
-```sh
-mkdir my-server && cd my-server
-evoker init paper 1.21.4 --git
-```
-
-Edit `evoker.json`. Setting `"eula": true` accepts the [Minecraft EULA](https://aka.ms/MinecraftEULA):
-
-```json
-{
-  "server": { "software": "paper", "version": "1.21.4", "build": "latest" },
-  "eula": true,
-  "properties": { "motd": "My server", "max-players": 20 },
-  "content": {},
-  "evoker": { "jvmArgs": ["-Xmx4G"] }
-}
-```
-
-Add content and start:
+**Make a pack**, in an empty folder:
 
 ```sh
-evoker add luckperms             # Modrinth
-evoker add hangar:ViaVersion     # Hangar
-evoker add https://example.com/MyPlugin.jar --type plugin   # anything else
-evoker start
+evoker create "My Pack" fabric 1.21.4 --git
+evoker add lithium                       # server-side
+evoker add sodium                        # client-side: evoker works the sides out
+evoker add distant-horizons --optional   # players choose
+evoker list
 ```
 
-Or start from a modpack:
+Commit `evoker.json` and `evoker.lock` (and an `icon.png`, and any configs in `overrides/`) and push them to GitHub. The folder's raw URL is the pack URL, e.g. `https://raw.githubusercontent.com/you/my-pack/main/`.
+
+**Run the server**, in an empty folder:
 
 ```sh
-evoker import cobblemon-fabric
+evoker install server https://raw.githubusercontent.com/you/my-pack/main/
+evoker config jvmArgs '["-Xmx4G"]'
+evoker server start
 ```
+
+**Play:** players install evoker and Prism Launcher, then
+
+```sh
+evoker install https://raw.githubusercontent.com/you/my-pack/main/
+```
+
+and launch the new instance from Prism.
 
 ## Commands
 
-| Command | |
+| Pack (in the pack folder) | |
 |---|---|
-| `evoker init [software] [version] [--git]` | Create `evoker.json` (and optionally a git repo) |
-| `evoker add <slug> [version]` | Add a mod or plugin with its dependencies |
-| `evoker remove <slug>` | Remove it and whatever only it needed |
-| `evoker import <pack>` | Import a Modrinth modpack (slug, `.mrpack` file or URL) |
-| `evoker install` | Download whatever is missing |
-| `evoker update [slug]` | Move `latest` entries to their newest versions |
-| `evoker upgrade [--dry-run]` | Move everything, pins included, to the newest versions for the game version |
-| `evoker start` | Install, then run the server |
-| `evoker list [--output=json]` | Show what's installed: versions, pins, dependencies |
-| `evoker command` | Print the launch command, for systemd, Docker or a panel |
+| `evoker create <name> <loader> [version] [client\|server\|both]` | Start a pack |
+| `evoker add <source:name>[@version] [--optional]` | Add content with its dependencies |
+| `evoker url <name> <url> <type>` | Add a file from a URL |
+| `evoker remove <name>` | Remove it and whatever only it needed |
+| `evoker list [type] [--output=json]` | Show versions, pins, sides and dependencies |
+| `evoker update [name \| list]` | Move `latest` entries to their newest versions |
+| `evoker upgrade [version \| list]` | Move the pack to a new game version |
+| `evoker import <modpack>` | Start a pack from a Modrinth modpack |
 
-Full reference: [Commands](https://github.com/gavinhsmith/evoker/wiki/Commands) · [evoker.json](https://github.com/gavinhsmith/evoker/wiki/evoker-json) · [evoker.lock](https://github.com/gavinhsmith/evoker/wiki/evoker-lock) · [Server Software](https://github.com/gavinhsmith/evoker/wiki/Server-Software) · [Content Sources](https://github.com/gavinhsmith/evoker/wiki/Content-Sources)
+| Server (in the server folder) | |
+|---|---|
+| `evoker install server <pack-url>` | Install the pack as a server here |
+| `evoker server start` | Update, then run the server |
+| `evoker server update [list]` | Apply the pack's latest changes |
+| `evoker server command` | Print the launch command, for systemd, Docker or a panel |
+
+| Client | |
+|---|---|
+| `evoker install <pack-url>` | Install the pack as a Prism Launcher instance |
+| `evoker client update <pack>` | Update the instance (Prism runs this before every launch) |
+| `evoker client options <pack>` | Choose optional content again |
+
+`evoker config [setting] [value]` changes evoker's own settings. Full reference: [Commands](https://github.com/gavinhsmith/evoker/wiki/Commands) · [evoker.json](https://github.com/gavinhsmith/evoker/wiki/evoker-json) · [Servers](https://github.com/gavinhsmith/evoker/wiki/Servers) · [Clients](https://github.com/gavinhsmith/evoker/wiki/Clients) · [Overrides](https://github.com/gavinhsmith/evoker/wiki/Overrides) · [Content Sources](https://github.com/gavinhsmith/evoker/wiki/Content-Sources)
 
 ## Feedback
 
-evoker is young (0.x). If something doesn't work with your server, a mod, or a plugin, please [open an issue](https://github.com/gavinhsmith/evoker/issues). Ideas and questions are welcome in [Discussions](https://github.com/gavinhsmith/evoker/discussions). A ⭐ helps other server owners find it.
+evoker is young (0.x). If something doesn't work with your pack, server, a mod, or a plugin, please [open an issue](https://github.com/gavinhsmith/evoker/issues). Ideas and questions are welcome in [Discussions](https://github.com/gavinhsmith/evoker/discussions). A ⭐ helps others find it.
 
 ## Contributing
 

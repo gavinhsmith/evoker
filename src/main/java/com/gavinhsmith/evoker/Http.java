@@ -36,6 +36,14 @@ final class Http {
         return Json.MAPPER.readTree(response.body());
     }
 
+    /** The body, or null on 404. */
+    byte[] bytesOrNull(String url) {
+        HttpResponse<byte[]> response = send(url, HttpResponse.BodyHandlers.ofByteArray());
+        if (response.statusCode() == 404) return null;
+        check(url, response);
+        return response.body();
+    }
+
     /** POSTs body as JSON and parses the JSON reply. */
     JsonNode postJson(String url, Object body) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", USER_AGENT)
@@ -46,14 +54,11 @@ final class Http {
         return Json.MAPPER.readTree(response.body());
     }
 
-    /** A downloaded temp file and its hashes. The caller moves or deletes it. */
-    record Fetched(Path file, String sha256, String sha1) {}
+    /** A downloaded temp file, its sha256 / sha1, and its hash with the requested algorithm (lock format, or null). */
+    record Fetched(Path file, String sha256, String sha1, String hash) {}
 
-    /**
-     * Downloads url into a temp file in dir. If algo/expected (the upstream's own hash) are given,
-     * a mismatch deletes the file and fails.
-     */
-    Fetched download(String url, Path dir, String algo, String expected) {
+    /** Downloads url into a temp file in dir, hashing it with SHA-256, SHA-1 and algo (if not null). */
+    Fetched download(String url, Path dir, String algo) {
         HttpResponse<InputStream> response = send(url, HttpResponse.BodyHandlers.ofInputStream());
         check(url, response);
         Path temp = null;
@@ -61,20 +66,17 @@ final class Http {
             Files.createDirectories(dir);
             temp = Files.createTempFile(dir, ".evoker-", ".tmp");
             MessageDigest sha256 = digest("SHA-256"), sha1 = digest("SHA-1");
-            MessageDigest upstream = algo == null ? null : digest(algo);
+            MessageDigest other = algo == null ? null : digest(algo);
             try (OutputStream out = Files.newOutputStream(temp)) {
                 byte[] buf = new byte[64 * 1024];
                 for (int n; (n = in.read(buf)) > 0; ) {
                     out.write(buf, 0, n);
                     sha256.update(buf, 0, n);
                     sha1.update(buf, 0, n);
-                    if (upstream != null) upstream.update(buf, 0, n);
+                    if (other != null) other.update(buf, 0, n);
                 }
             }
-            if (upstream != null && !hex(upstream).equalsIgnoreCase(expected)) {
-                throw new EvokerException("download of " + url + " is corrupt (" + algo + " mismatch)");
-            }
-            Fetched fetched = new Fetched(temp, hex(sha256), hex(sha1));
+            Fetched fetched = new Fetched(temp, hex(sha256), hex(sha1), other == null ? null : hash(algo, hex(other)));
             temp = null;
             return fetched;
         } catch (IOException e) {
@@ -84,19 +86,37 @@ final class Http {
         }
     }
 
+    /** A hash as evoker.lock stores it, e.g. "sha256:ab12..."; null when algo is null. */
+    static String hash(String algo, String hex) {
+        return algo == null ? null : algo.toLowerCase(java.util.Locale.ROOT).replace("-", "") + ":"
+                + hex.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** The MessageDigest algorithm of a lock hash: "sha512:..." → "SHA-512". */
+    static String algo(String hash) {
+        return switch (hash.substring(0, hash.indexOf(':'))) {
+            case "sha1" -> "SHA-1";
+            case "sha256" -> "SHA-256";
+            case "sha512" -> "SHA-512";
+            case "md5" -> "MD5";
+            default -> throw new EvokerException("unknown hash " + hash);
+        };
+    }
+
     static String enc(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
-    static String sha256(Path file) {
-        MessageDigest digest = digest("SHA-256");
+    /** A file's hash in lock format, e.g. "sha512:ab12...". */
+    static String hash(Path file, String algo) {
+        MessageDigest digest = digest(algo);
         try (InputStream in = Files.newInputStream(file)) {
             byte[] buf = new byte[64 * 1024];
             for (int n; (n = in.read(buf)) > 0; ) digest.update(buf, 0, n);
         } catch (IOException e) {
             throw new EvokerException("cannot read " + file + ": " + e.getMessage(), e);
         }
-        return hex(digest);
+        return hash(algo, hex(digest));
     }
 
     static void deleteQuietly(Path file) {
