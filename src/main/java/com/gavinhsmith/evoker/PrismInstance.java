@@ -148,10 +148,24 @@ final class PrismInstance {
 
         Lock.Game game = pack.lock().game();
         if (instance.components(game)) {
-            if (System.getenv("INST_ID") != null) instance.guardComponents(game);
-            Main.log(pack.manifest().name() + " was updated to Minecraft " + game.version()
+            String message = pack.manifest().name() + " was updated to Minecraft " + game.version()
                     + (loaderUid(game.loader()) == null ? "" : " (" + game.loader() + " " + game.build() + ")")
-                    + ". Press Launch again.");
+                    + ". Press Launch again.";
+            Main.log(message);
+            // Under Prism: guard the change while the player reads the message.
+            Thread guard = null;
+            if (System.getenv("INST_ID") != null) {
+                guard = new Thread(() -> instance.guardComponents(game));
+                guard.start();
+            }
+            if (Dialogs.available()) Dialogs.message(pack.manifest().name(), message);
+            if (guard != null) {
+                try {
+                    guard.join();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             return 1;
         }
         return 0;
@@ -320,6 +334,14 @@ final class PrismInstance {
             }
         });
         if (optional.isEmpty()) return chosen;
+        if (System.console() == null && Dialogs.available()) {
+            chosen.addAll(Dialogs.choose(pack.manifest().name(), optional.stream().map(key -> {
+                Lock.Entry e = pack.lock().content().get(key);
+                return new Dialogs.Choice(key, Objects.requireNonNullElse(e.title(), key), e.description(),
+                        previous.contains(key));
+            }).toList()));
+            return chosen;
+        }
         if (System.console() == null) {
             optional.stream().filter(previous::contains).forEach(chosen::add);
             long left = optional.stream().filter(k -> !previous.contains(k)).count();
