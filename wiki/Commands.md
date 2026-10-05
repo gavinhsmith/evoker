@@ -13,6 +13,7 @@ Run every command inside the server folder: `evoker <command>` (or `java -jar ev
 | `update [slug]` | Moves `latest` entries to their newest compatible versions, and the server to its newest build if `build` is `latest`. Pinned entries stay. With a slug, updates only that entry (and not the server). Prints what changed. |
 | `upgrade [--dry-run]` | Moves **everything** (pinned entries and a pinned server `build` included) to the newest versions for the current game version, and rewrites the pins in `evoker.json`. `--dry-run` prints the changes without touching anything. |
 | `start` | `install` (plus the auto-updates enabled in the `evoker` block), then runs the server as a child process. The console is passed through; evoker exits with the server's exit code. |
+| `command` | Prints the command `start` would run, on one line, for what is in `evoker.lock` (arguments containing spaces are double-quoted). Offline. Errors if nothing is installed yet. See [Running the server yourself](#running-the-server-yourself). |
 | `version` | Prints the evoker version. |
 | `help` | Prints the command list. |
 
@@ -41,3 +42,13 @@ The same rule applies whenever evoker can't resolve something it already has ins
 ## Stopping the server
 
 Type `stop` in the console, or press Ctrl+C. Ctrl+C reaches the server too, so it saves before exiting; evoker waits for it.
+
+## Running the server yourself
+
+To run the server from systemd, Docker, a hosting panel or your own script instead of `evoker start`, install first, then run what `command` prints:
+
+```sh
+evoker install && eval "exec $(evoker command)"
+```
+
+Ask evoker each time rather than copying the line once: for NeoForge it contains the build number, which changes on `update` / `upgrade`. Unlike `start`, this skips the auto-updates in the `evoker` block.

@@ -56,6 +56,19 @@ class MainTest {
     }
 
     @Test
+    void commandPrintsTheLaunchLineForWhatIsLocked() throws IOException {
+        paperProject();
+        assertEquals(1, run("command"));
+
+        assertEquals(0, run("install"));
+        Files.writeString(dir.resolve(Manifest.FILE), Files.readString(dir.resolve(Manifest.FILE))
+                .replace("\"-Xmx64M\"", "\"-Xmx64M\", \"-Dx=a b\""));
+        String out = Output.out(() -> assertEquals(0, run("command")));
+
+        assertTrue(out.strip().endsWith(" -Xmx64M \"-Dx=a b\" -jar server.jar nogui"), out);
+    }
+
+    @Test
     void secondInstallDownloadsNothing() throws IOException {
         paperProject();
         assertEquals(0, run("install"));

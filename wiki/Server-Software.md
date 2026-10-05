@@ -35,7 +35,7 @@ The installer's output is shown in the console as it runs, and also saved to `.e
 
 ## How the server is launched
 
-`<java> <jvmArgs…> <launch> nogui`, in the server folder, where `<launch>` is:
+`<java> <jvmArgs…> <launch> nogui`, in the server folder (`evoker command` prints it), where `<launch>` is:
 
 | `software` | Launch |
 |---|---|

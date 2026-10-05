@@ -36,6 +36,7 @@ public final class Main {
               update [slug]          move "latest" entries (and the server build) to their newest versions
               upgrade [--dry-run]    move everything, pins included, to the newest versions for this game version
               start                  install, then run the server
+              command                print the command that starts the server (for systemd, Docker, panels)
               version                print the evoker version
             """;
 
@@ -81,6 +82,7 @@ public final class Main {
                 case "start" -> {
                     return main.start();
                 }
+                case "command" -> System.out.println(main.command());
                 case "version", "--version" -> System.out.println("evoker " + VERSION);
                 case "help", "-h", "--help" -> System.out.print(USAGE);
                 default -> {
@@ -539,6 +541,15 @@ public final class Main {
         }
         Lock.Entry pack = packs.get(0).getValue().entry();
         return Map.of("resource-pack", pack.url(), "resource-pack-sha1", Objects.requireNonNullElse(pack.sha1(), ""));
+    }
+
+    /** The launch command for what is locked, one line, offline; arguments with spaces are double-quoted. */
+    String command() {
+        Lock.Locked locked = Lock.read(dir).server();
+        if (locked == null) throw new EvokerException("no server installed yet, run evoker install first");
+        return Server.command(locked, Manifest.read(dir).evoker(), dir).stream()
+                .map(a -> a.matches(".*\\s.*") ? '"' + a + '"' : a)
+                .collect(Collectors.joining(" "));
     }
 
     /** Installs (with the configured auto-updates), then runs the server as a child process; returns its exit code. */
