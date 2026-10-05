@@ -46,7 +46,7 @@ Before every launch, Prism runs `evoker client update`:
 4. **New optional entries:** a window asks whether to install them. The answers are remembered.
 5. **The game version or loader changed:** evoker updates the instance, then **stops the launch** (by exiting with an error, which Prism treats as "don't launch") and shows a message, e.g. *"My Pack was updated to Minecraft 1.21.5. Press Launch again."* Prism reads the instance's versions before it runs the pre-launch command, so the new ones only take effect on the next launch.
 
-Every update compares the instance's versions with the pack, not only what changed upstream. Prism saves its copy of `mmc-pack.json` a few seconds after loading it, so it can occasionally overwrite a version change evoker just made; the next launch then corrects it again.
+Prism saves its own copy of `mmc-pack.json` about five seconds after loading it, which would undo the change. So when the versions change, evoker keeps the launch waiting about seven seconds and redoes the change if Prism saved over it. Every update also compares the instance's versions with the pack, not only what changed upstream, so anything that slips through is corrected on the next launch.
 
 **Launching is never blocked by updates:** if the pack can't be fetched (offline, the URL is gone) or a file can't be downloaded, evoker warns and the game launches with what's installed. A file that doesn't match its locked hash is never installed.
 

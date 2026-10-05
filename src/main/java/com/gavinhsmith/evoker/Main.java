@@ -56,6 +56,7 @@ public final class Main {
             client commands:
               install <pack-url> | --local <pack-folder>
                                      install a pack as a new Prism Launcher instance
+              client update <pack>   install the pack's newest version (Prism runs this before every launch)
               client options <pack>  choose the pack's optional content again
 
               config [setting] [value] [--user]
@@ -139,9 +140,12 @@ public final class Main {
                     }
                 }
                 case "client" -> {
-                    switch (arg(rest, 0, "client options <pack>")) {
+                    switch (arg(rest, 0, "client update | options <pack>")) {
+                        case "update" -> {
+                            return PrismInstance.update(main.http, arg(rest, 1, "client update <pack>"));
+                        }
                         case "options" -> PrismInstance.options(main.http, arg(rest, 1, "client options <pack>"));
-                        default -> throw new EvokerException("usage: evoker client options <pack>");
+                        default -> throw new EvokerException("usage: evoker client update | options <pack>");
                     }
                 }
                 case "config" -> System.out.println(main.config(rest, flags.containsKey("--user")));
@@ -193,6 +197,15 @@ public final class Main {
     private static String arg(List<String> args, int i, String usage) {
         if (args.size() <= i) throw new EvokerException("usage: evoker " + usage);
         return args.get(i);
+    }
+
+    /** The running evoker.jar (the classes folder when run from a build). */
+    static Path jar() {
+        try {
+            return Path.of(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toAbsolutePath();
+        } catch (java.net.URISyntaxException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     static void log(String message) {
